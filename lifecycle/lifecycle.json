@@ -1,0 +1,111 @@
+{
+    "LifeCycle": {
+        "States": [
+            {
+                "Transitions": [
+                    {
+                        "Target": "Published",
+                        "Event": "Publish"
+                    },
+                    {
+                        "Target": "Prototyped",
+                        "Event": "Deploy as a Prototype"
+                    }
+                ],
+                "State": "Created",
+                "CheckItems": [
+                    "Deprecate old versions after publishing the API",
+                    "Requires re-subscription when publishing the API"
+                ]
+            },
+            {
+                "Transitions": [
+                    {
+                        "Target": "Published",
+                        "Event": "Publish"
+                    },
+                    {
+                        "Target": "Created",
+                        "Event": "Demote to Created"
+                    },
+                    {
+                        "Target": "Prototyped",
+                        "Event": "Deploy as a Prototype"
+                    }
+                ],
+                "State": "Prototyped",
+                "CheckItems": [
+                    "Deprecate old versions after publishing the API",
+                    "Requires re-subscription when publishing the API"
+                ]
+            },
+            {
+                "Transitions": [
+                    {
+                        "Target": "Blocked",
+                        "Event": "Block"
+                    },
+                    {
+                        "Target": "Prototyped",
+                        "Event": "Deploy as a Prototype"
+                    },
+                    {
+                        "Target": "Created",
+                        "Event": "Demote to Created"
+                    },
+                    {
+                        "Target": "Deprecated",
+                        "Event": "Deprecate"
+                    },
+                    {
+                        "Target": "Published",
+                        "Event": "Publish"
+                    },
+                    {
+                        "Target": "Registered UAT",
+                        "Event": "Register UAT"
+                    }
+                ],
+                "State": "Published"
+            },
+            {
+                "Transitions": [
+                    {
+                        "Target": "Published",
+                        "Event": "Demote to Published"
+                    },
+                    {
+                        "Target": "Deprecated",
+                        "Event": "Deprecate"
+                    }
+                ],
+                "State": "Registered UAT"
+            },
+            {
+                "Transitions": [
+                    {
+                        "Target": "Deprecated",
+                        "Event": "Deprecate"
+                    },
+                    {
+                        "Target": "Published",
+                        "Event": "Re-Publish"
+                    }
+                ],
+                "State": "Blocked"
+            },
+            {
+                "Transitions": [
+                    {
+                        "Target": "Retired",
+                        "Event": "Retire"
+                    }
+                ],
+                "State": "Deprecated"
+            },
+            {
+                "State": "Retired"
+            }
+        ]
+    }
+}

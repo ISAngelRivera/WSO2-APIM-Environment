@@ -16,17 +16,22 @@ echo "════════════════════════�
 echo ""
 
 # 1. Esperar a que APIM esté listo
-echo "[1/3] Verificando que APIM esté listo..."
+echo "[1/4] Verificando que APIM esté listo..."
 ./scripts/wait-for-apim.sh
 
-# 2. Verificar lifecycle
+# 2. Configurar lifecycle con Register UAT
 echo ""
-echo "[2/3] Verificando lifecycle customizado..."
+echo "[2/4] Configurando lifecycle customizado..."
+./scripts/configure-lifecycle.sh
+
+# 3. Verificar lifecycle
+echo ""
+echo "[3/4] Verificando lifecycle..."
 ./scripts/verify-lifecycle.sh
 
-# 3. Crear APIs de prueba
+# 4. Crear APIs de prueba
 echo ""
-echo "[3/3] Creando set completo de APIs de prueba..."
+echo "[4/4] Creando set completo de APIs de prueba..."
 ./scripts/create-all-sample-apis.sh
 
 echo ""

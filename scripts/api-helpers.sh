@@ -154,6 +154,62 @@ EOF
         "$APIM_URL/api/am/publisher/v4/apis/change-lifecycle?apiId=$api_id&action=Publish" > /dev/null 2>&1
 
     echo -e "        ${GREEN}✓ $name v$version creado y publicado${NC}"
+
+    # Pequeño delay para que WSO2 indexe el API
+    sleep 2
+}
+
+# ══════════════════════════════════════════════════════════════
+# create_api_version
+# Crea una nueva versión de un API existente (ej: 1.0.0 → 2.0.0)
+#
+# Params:
+#   $1 - name (API existente)
+#   $2 - source_version (versión origen)
+#   $3 - new_version (nueva versión)
+# ══════════════════════════════════════════════════════════════
+create_api_version() {
+    local name="$1"
+    local source_version="$2"
+    local new_version="$3"
+
+    local auth_header=$(get_auth_header)
+
+    # Obtener ID del API origen
+    local api_response=$(curl -k -s \
+        -H "Authorization: $auth_header" \
+        "$APIM_URL/api/am/publisher/v4/apis?query=name:$name" 2>/dev/null)
+
+    local api_id=""
+    if command -v jq &> /dev/null; then
+        api_id=$(echo "$api_response" | jq -r ".list[] | select(.name==\"$name\" and .version==\"$source_version\") | .id" 2>/dev/null | head -1)
+    fi
+
+    if [ -z "$api_id" ] || [ "$api_id" = "null" ]; then
+        echo -e "        ${RED}✗ API $name v$source_version no encontrado para copiar${NC}"
+        return 1
+    fi
+
+    # Crear nueva versión usando copy-api
+    local copy_response=$(curl -k -s -X POST \
+        -H "Authorization: $auth_header" \
+        -H "Content-Type: application/json" \
+        "$APIM_URL/api/am/publisher/v4/apis/copy-api?apiId=$api_id&newVersion=$new_version" 2>/dev/null)
+
+    local new_api_id=$(echo "$copy_response" | jq -r '.id' 2>/dev/null)
+
+    if [ -z "$new_api_id" ] || [ "$new_api_id" = "null" ]; then
+        echo -e "        ${RED}✗ Error creando $name v$new_version${NC}"
+        return 1
+    fi
+
+    # Publicar la nueva versión
+    curl -k -s -X POST \
+        -H "Authorization: $auth_header" \
+        "$APIM_URL/api/am/publisher/v4/apis/change-lifecycle?apiId=$new_api_id&action=Publish" > /dev/null 2>&1
+
+    echo -e "        ${GREEN}✓ $name v$new_version creado (copiado de v$source_version)${NC}"
+    sleep 2
 }
 
 # ══════════════════════════════════════════════════════════════
@@ -172,14 +228,19 @@ create_revision() {
 
     local auth_header=$(get_auth_header)
 
-    # Obtener ID del API
+    # Obtener ID del API usando jq si está disponible, sino con grep
     local api_response=$(curl -k -s \
         -H "Authorization: $auth_header" \
-        "$APIM_URL/api/am/publisher/v4/apis?query=name:$name%20version:$version" 2>/dev/null)
+        "$APIM_URL/api/am/publisher/v4/apis?query=name:$name" 2>/dev/null)
 
-    local api_id=$(echo "$api_response" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    local api_id=""
+    if command -v jq &> /dev/null; then
+        api_id=$(echo "$api_response" | jq -r ".list[] | select(.name==\"$name\" and .version==\"$version\") | .id" 2>/dev/null | head -1)
+    else
+        api_id=$(echo "$api_response" | sed 's/,/\n/g' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    fi
 
-    if [ -z "$api_id" ]; then
+    if [ -z "$api_id" ] || [ "$api_id" = "null" ]; then
         echo -e "        ${RED}✗ API $name v$version no encontrado${NC}"
         return 1
     fi
@@ -232,14 +293,19 @@ deprecate_api() {
 
     local auth_header=$(get_auth_header)
 
-    # Obtener ID del API
+    # Obtener ID del API usando jq si está disponible
     local api_response=$(curl -k -s \
         -H "Authorization: $auth_header" \
-        "$APIM_URL/api/am/publisher/v4/apis?query=name:$name%20version:$version" 2>/dev/null)
+        "$APIM_URL/api/am/publisher/v4/apis?query=name:$name" 2>/dev/null)
 
-    local api_id=$(echo "$api_response" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    local api_id=""
+    if command -v jq &> /dev/null; then
+        api_id=$(echo "$api_response" | jq -r ".list[] | select(.name==\"$name\" and .version==\"$version\") | .id" 2>/dev/null | head -1)
+    else
+        api_id=$(echo "$api_response" | sed 's/,/\n/g' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    fi
 
-    if [ -z "$api_id" ]; then
+    if [ -z "$api_id" ] || [ "$api_id" = "null" ]; then
         echo -e "        ${RED}✗ API $name v$version no encontrado${NC}"
         return 1
     fi
