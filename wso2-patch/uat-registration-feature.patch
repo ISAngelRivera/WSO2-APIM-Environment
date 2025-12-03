@@ -1,0 +1,62 @@
+diff --git a/portals/publisher/src/main/webapp/source/src/app/components/Apis/Details/LifeCycle/Components/UATRegistration.jsx b/portals/publisher/src/main/webapp/source/src/app/components/Apis/Details/LifeCycle/Components/UATRegistration.jsx
+index c87db326885..5e02661f6a0 100644
+--- a/portals/publisher/src/main/webapp/source/src/app/components/Apis/Details/LifeCycle/Components/UATRegistration.jsx
++++ b/portals/publisher/src/main/webapp/source/src/app/components/Apis/Details/LifeCycle/Components/UATRegistration.jsx
+@@ -202,7 +202,7 @@ export default function UATRegistration(props) {
+         }
+     }, [api?.id, registrationData]);
+ 
+-    // Don't render if API is not published or if it's an API Product
++    // Don't render if API is not published
+     if (!api || !isPublished) {
+         return null;
+     }
+@@ -321,10 +321,9 @@ export default function UATRegistration(props) {
+     /**
+      * Execute a single step in the registration flow
+      * @param {Object} step - Step configuration
+-     * @param {number} index - Step index
+      * @returns {Promise<boolean>} False if cancelled
+      */
+-    const executeStep = (step, index) => {
++    const executeStep = (step) => {
+         return new Promise((resolve) => {
+             setTimeout(() => {
+                 if (!isMountedRef.current) {
+@@ -361,7 +360,7 @@ export default function UATRegistration(props) {
+         const executeAllSteps = async () => {
+             for (let i = 0; i < steps.length; i += 1) {
+                 // eslint-disable-next-line no-await-in-loop
+-                const shouldContinue = await executeStep(steps[i], i);
++                const shouldContinue = await executeStep(steps[i]);
+                 if (!shouldContinue) {
+                     return;
+                 }
+diff --git a/portals/publisher/src/main/webapp/source/src/app/components/Apis/Details/LifeCycle/LifeCycle.jsx b/portals/publisher/src/main/webapp/source/src/app/components/Apis/Details/LifeCycle/LifeCycle.jsx
+index 4bec3774cc1..704a0eba284 100644
+--- a/portals/publisher/src/main/webapp/source/src/app/components/Apis/Details/LifeCycle/LifeCycle.jsx
++++ b/portals/publisher/src/main/webapp/source/src/app/components/Apis/Details/LifeCycle/LifeCycle.jsx
+@@ -32,6 +32,7 @@ import APIProduct from 'AppData/APIProduct';
+ import { getTypeToDisplay } from 'AppComponents/Shared/Utils';
+ import LifeCycleUpdate from './LifeCycleUpdate';
+ import LifeCycleHistory from './LifeCycleHistory';
++import UATRegistration from './Components/UATRegistration';
+ import { API_SECURITY_KEY_TYPE_PRODUCTION, API_SECURITY_KEY_TYPE_SANDBOX }
+     from '../Configuration/components/APISecurity/components/apiSecurityConstants';
+ 
+@@ -300,6 +301,15 @@ class LifeCycle extends Component {
+                                 isMCPServer={isMCPServer}
+                             />
+                         </Grid>
++                        {/* APIOps: UAT Registration Component - Only for APIs, not Products or MCP */}
++                        {!isAPIProduct && !isMCPServer && (
++                            <Grid item xs={12}>
++                                <UATRegistration
++                                    api={api}
++                                    lcState={lcState}
++                                />
++                            </Grid>
++                        )}
+                         <Grid item xs={12}>
+                             {lcHistory.length > 1 && (
+                                 <div>

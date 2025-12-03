@@ -1,0 +1,51 @@
+# WSO2 API Manager 4.5.0 - Entorno de Desarrollo APIOps
+#
+# Uso:
+#   Primera vez:     docker-compose up -d && ./scripts/wait-for-apim.sh && ./scripts/setup-all.sh
+#   Siguientes:      docker-compose up -d
+#   Reset completo:  docker-compose down -v && docker-compose up -d && ./scripts/setup-all.sh
+
+services:
+  wso2-apim:
+    image: wso2/wso2am:4.5.0
+    container_name: wso2-apim
+    hostname: wso2-apim
+    ports:
+      # Portal de Publisher
+      - "9443:9443"
+      # Portal de DevPortal
+      - "9763:9763"
+      # Gateway HTTPS
+      - "8243:8243"
+      # Gateway HTTP
+      - "8280:8280"
+    volumes:
+      # Persistencia de datos
+      - wso2-apim-data:/home/wso2carbon/wso2am-4.5.0/repository/database
+      # Persistencia de configuración del registry (lifecycles)
+      - wso2-apim-registry:/home/wso2carbon/wso2am-4.5.0/repository/resources
+      # Logs
+      - wso2-apim-logs:/home/wso2carbon/wso2am-4.5.0/repository/logs
+      # Archivo de lifecycle customizado (montado como solo lectura)
+      - ./lifecycle/APILifeCycle.xml:/home/wso2carbon/wso2am-4.5.0/repository/resources/lifecycles/APILifeCycle.xml:ro
+      # APIOps: Publisher con componente UATRegistration nativo (dropin React)
+      - ./publisher-dropin:/home/wso2carbon/wso2am-4.5.0/repository/deployment/server/webapps/publisher/site/public/dist:ro
+      # APIOps: index.jsp con el hash correcto del bundle
+      - ./publisher-dropin-pages/index.jsp:/home/wso2carbon/wso2am-4.5.0/repository/deployment/server/webapps/publisher/site/public/pages/index.jsp:ro
+    environment:
+      - TZ=Europe/Madrid
+    healthcheck:
+      test: ["CMD", "curl", "-k", "-f", "https://localhost:9443/carbon/admin/login.jsp"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    restart: unless-stopped
+
+volumes:
+  wso2-apim-data:
+    name: wso2-apim-data
+  wso2-apim-registry:
+    name: wso2-apim-registry
+  wso2-apim-logs:
+    name: wso2-apim-logs
