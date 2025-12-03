@@ -1,0 +1,12 @@
+# Archivos de sistema
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Logs locales
+*.log
+
+# Archivos temporales
+tmp/
+temp/
