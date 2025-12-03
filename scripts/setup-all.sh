@@ -24,10 +24,10 @@ echo ""
 echo "[2/3] Verificando lifecycle customizado..."
 ./scripts/verify-lifecycle.sh
 
-# 3. Crear API de prueba
+# 3. Crear APIs de prueba
 echo ""
-echo "[3/3] Creando API de prueba..."
-./scripts/create-sample-api.sh
+echo "[3/3] Creando set completo de APIs de prueba..."
+./scripts/create-all-sample-apis.sh
 
 echo ""
 echo "════════════════════════════════════════════════════════════"
