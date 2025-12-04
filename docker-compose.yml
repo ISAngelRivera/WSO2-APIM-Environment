@@ -28,6 +28,10 @@ services:
       - wso2-apim-logs:/home/wso2carbon/wso2am-4.5.0/repository/logs
       # Archivo de lifecycle customizado (montado como solo lectura)
       - ./lifecycle/APILifeCycle.xml:/home/wso2carbon/wso2am-4.5.0/repository/resources/lifecycles/APILifeCycle.xml:ro
+      # APIOps: Publisher con componente UATRegistration nativo (dropin React)
+      - ./publisher-dropin:/home/wso2carbon/wso2am-4.5.0/repository/deployment/server/webapps/publisher/site/public/dist:ro
+      # APIOps: index.jsp con el hash correcto del bundle
+      - ./publisher-dropin-pages/index.jsp:/home/wso2carbon/wso2am-4.5.0/repository/deployment/server/webapps/publisher/site/public/pages/index.jsp:ro
     environment:
       - TZ=Europe/Madrid
     healthcheck:
