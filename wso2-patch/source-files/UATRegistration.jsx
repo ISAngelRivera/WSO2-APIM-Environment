@@ -48,6 +48,24 @@ import MuiAlert from 'AppComponents/Shared/Alert';
 
 const PREFIX = 'UATRegistration';
 
+// =============================================================================
+// GitHub Configuration for WSO2-Processor
+// In production, these should come from environment/settings
+// =============================================================================
+const GITHUB_CONFIG = {
+    owner: 'ISAngelRivera',           // GitHub org/user
+    repo: 'WSO2-Processor',           // Repository that handles WSO2 events
+    workflow: 'receive-uat-request.yml', // Workflow file to trigger
+    // Token should be injected via WSO2 settings or environment
+    // For MVP, we'll use a placeholder that should be configured
+    getToken: () => {
+        // Try to get from WSO2 settings first, then fallback
+        const settings = window.__RUNTIME_CONFIG__?.GITHUB_TOKEN
+            || localStorage.getItem('github_pat_token');
+        return settings || null;
+    },
+};
+
 const classes = {
     card: `${PREFIX}-card`,
     header: `${PREFIX}-header`,
@@ -164,6 +182,61 @@ const saveState = (apiId, data) => {
     } catch (e) {
         console.error('Error saving UAT registration state:', e);
     }
+};
+
+/**
+ * Trigger GitHub workflow dispatch
+ * @param {Object} apiData - API data to send
+ * @returns {Promise<Object>} Response with success status and run info
+ */
+const triggerGitHubWorkflow = async (apiData) => {
+    const token = GITHUB_CONFIG.getToken();
+
+    if (!token) {
+        throw new Error('GitHub token not configured. Set it in localStorage as "github_pat_token"');
+    }
+
+    const url = `https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/actions/workflows/${GITHUB_CONFIG.workflow}/dispatches`;
+
+    const payload = {
+        ref: 'main',
+        inputs: {
+            apiId: apiData.id,
+            apiName: apiData.name,
+            apiVersion: apiData.version,
+            apiContext: apiData.context || '',
+            userId: apiData.userId || 'unknown',
+            timestamp: new Date().toISOString(),
+            // Additional metadata as JSON string
+            metadata: JSON.stringify({
+                provider: apiData.provider || 'admin',
+                type: apiData.type || 'HTTP',
+                lifeCycleStatus: apiData.lifeCycleStatus || 'PUBLISHED',
+            }),
+        },
+    };
+
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/vnd.github.v3+json',
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+    });
+
+    if (response.status === 204) {
+        // Success - workflow triggered
+        return {
+            success: true,
+            message: 'Workflow triggered successfully',
+        };
+    }
+
+    // Error handling
+    const errorBody = await response.text();
+    throw new Error(`GitHub API error (${response.status}): ${errorBody}`);
 };
 
 /**
@@ -343,39 +416,69 @@ export default function UATRegistration(props) {
 
     /**
      * Start registration process
-     * TODO: Replace with actual API call to backend
+     * Triggers GitHub workflow in WSO2-Processor
      */
     const startRegistration = async () => {
-        setRegistrationData({ state: STATES.INITIATING, startedAt: new Date().toISOString() });
+        const startedAt = new Date().toISOString();
+        setRegistrationData({ state: STATES.INITIATING, startedAt });
 
-        const steps = [
-            { state: STATES.EXPORTING, wait: 1500 },
-            { state: STATES.VALIDATING, wait: 2000 },
-            { state: STATES.REQUESTING_CRQ, wait: 1500 },
-            { state: STATES.CRQ_PENDING, wait: 2500 },
-            { state: STATES.REGISTERING, wait: 1500 },
-        ];
+        try {
+            // Step 1: Trigger GitHub workflow
+            setRegistrationData((prev) => ({ ...prev, state: STATES.EXPORTING }));
 
-        // Execute steps sequentially
-        const executeAllSteps = async () => {
-            for (let i = 0; i < steps.length; i += 1) {
-                // eslint-disable-next-line no-await-in-loop
-                const shouldContinue = await executeStep(steps[i]);
-                if (!shouldContinue) {
-                    return;
+            const apiData = {
+                id: api.id,
+                name: api.name,
+                version: api.version,
+                context: api.context,
+                provider: api.provider,
+                type: api.type,
+                lifeCycleStatus: api.lifeCycleStatus,
+                userId: 'current-user', // TODO: Get from auth context
+            };
+
+            await triggerGitHubWorkflow(apiData);
+
+            // Step 2: Workflow triggered - now we wait for GitHub to process
+            // The remaining steps happen in GitHub Actions:
+            // - VALIDATING: Linters run in GIT-Helix-Processor
+            // - REQUESTING_CRQ: Helix ticket creation
+            // - CRQ_PENDING: Waiting for approval
+            // - REGISTERING: Final storage
+
+            // For MVP, we show a pending state and provide link to GitHub
+            setRegistrationData((prev) => ({
+                ...prev,
+                state: STATES.VALIDATING,
+                workflowTriggered: true,
+                githubRepo: `${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}`,
+            }));
+
+            // Simulate progression for demo (in production, poll GitHub or use webhooks)
+            const steps = [
+                { state: STATES.REQUESTING_CRQ, wait: 3000 },
+                { state: STATES.CRQ_PENDING, wait: 4000 },
+                { state: STATES.REGISTERING, wait: 3000 },
+            ];
+
+            const executeAllSteps = async () => {
+                for (let i = 0; i < steps.length; i += 1) {
+                    // eslint-disable-next-line no-await-in-loop
+                    const shouldContinue = await executeStep(steps[i]);
+                    if (!shouldContinue) {
+                        return;
+                    }
                 }
-            }
 
-            // Success after final delay
-            setTimeout(() => {
+                // Success
                 if (!isMountedRef.current) return;
                 setRegistrationData((prev) => ({
                     ...prev,
                     state: STATES.REGISTERED,
                     lastRegistered: {
-                        revision: `rev-${Math.floor(Math.random() * 10 + 1)}`,
+                        revision: `rev-${Date.now().toString(36)}`,
                         registeredAt: new Date().toISOString(),
-                        prUrl: 'https://github.com/example/apis/pull/123',
+                        prUrl: `https://github.com/${GITHUB_CONFIG.owner}/GIT-Helix-Processor/pulls`,
                     },
                 }));
 
@@ -383,10 +486,26 @@ export default function UATRegistration(props) {
                     id: 'Apis.Details.LifeCycle.UATRegistration.success',
                     defaultMessage: 'API registrada en UAT correctamente',
                 }));
-            }, 1000);
-        };
+            };
 
-        executeAllSteps();
+            executeAllSteps();
+        } catch (error) {
+            console.error('UAT Registration error:', error);
+
+            setRegistrationData((prev) => ({
+                ...prev,
+                state: STATES.ERROR,
+                error: {
+                    title: 'Error al iniciar registro',
+                    message: error.message || 'No se pudo conectar con GitHub',
+                },
+            }));
+
+            MuiAlert.error(intl.formatMessage({
+                id: 'Apis.Details.LifeCycle.UATRegistration.error',
+                defaultMessage: 'Error al iniciar el registro UAT',
+            }));
+        }
     };
 
     /**

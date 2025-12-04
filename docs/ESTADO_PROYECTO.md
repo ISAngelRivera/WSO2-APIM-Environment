@@ -1,24 +1,55 @@
 # Estado del Proyecto APIOps - WSO2 APIM
 
-**Última actualización:** 2024-12-04
+**Última actualización:** 2024-12-04 (sesión tarde)
 **Versión WSO2 APIM:** 4.5.0
 
 ## Objetivo Principal
 
 Crear un sistema APIOps que integre:
 1. **WSO2 API Manager** - Gestión de APIs
-2. **Git** - Versionado de definiciones de API
+2. **Git (GitHub)** - Versionado de definiciones de API + Backend (GitHub Actions)
 3. **Helix (ITSM)** - Gestión de cambios (CRQ)
 
-### Flujo Deseado
+### Arquitectura GitOps Aprobada
+
 ```
-Usuario hace clic en "Registrar en UAT"
-    → Exportar API a Git (PR)
-    → Validar definición
-    → Crear CRQ en Helix
-    → Esperar aprobación CRQ
-    → Importar API en UAT
-    → Notificar al usuario
+┌─────────────────────┐
+│  Publisher Portal   │
+│  (UATRegistration)  │
+└─────────┬───────────┘
+          │ workflow_dispatch
+          ▼
+┌─────────────────────┐
+│   WSO2-Processor    │  ← Repo específico para WSO2
+│  (GitHub Actions)   │
+│  - Exporta API      │
+│  - Crea PR          │
+└─────────┬───────────┘
+          │ Pull Request con datos planos
+          ▼
+┌─────────────────────┐
+│ GIT-Helix-Processor │  ← Repo genérico (vendor-agnostic)
+│  (GitHub Actions)   │
+│  - Linters          │
+│  - Crea CRQ Helix   │
+│  - Almacena API     │
+└─────────────────────┘
+```
+
+**Decisión clave:** GitHub ES el backend. No hay servidor adicional.
+
+### Flujo Detallado
+```
+1. Usuario hace clic en "Registrar en UAT"
+2. UATRegistration → workflow_dispatch → WSO2-Processor
+3. WSO2-Processor:
+   - Exporta API de WSO2 (via API REST o apictl)
+   - Crea PR en GIT-Helix-Processor con datos PLANOS (no artifact URL)
+4. GIT-Helix-Processor (on: pull_request to requests/):
+   - Ejecuta linters y validaciones
+   - Crea ticket CRQ en Helix
+   - Almacena API versionada
+5. Notifica resultado al usuario
 ```
 
 ## Estado Actual
@@ -64,21 +95,52 @@ Usuario hace clic en "Registrar en UAT"
    - Funciona correctamente en APIs publicadas
    - Muestra el flujo de registro UAT con stepper visual
 
+9. **Conexión UATRegistration → GitHub** ✅
+   - `triggerGitHubWorkflow()` llama a GitHub API
+   - Dispara `workflow_dispatch` en WSO2-Processor
+   - Pasa datos de la API (name, version, id, context, user)
+   - Token configurable en `localStorage.setItem('github_pat_token', 'ghp_xxx')`
+
+10. **WSO2-Processor** ✅
+    - Repo: https://github.com/ISAngelRivera/WSO2-Processor
+    - Workflow `receive-uat-request.yml` implementado
+    - Exporta API de WSO2 (REST API o mock para demo)
+    - Crea PR en GIT-Helix-Processor con datos planos:
+      ```
+      requests/{request-id}/
+      ├── request.yaml      # Metadatos
+      ├── api.yaml          # Definición API
+      ├── swagger.yaml      # OpenAPI spec
+      └── params.yaml       # Config entorno
+      ```
+
+11. **GIT-Helix-Processor** ✅
+    - Repo: https://github.com/ISAngelRivera/GIT-Helix-Processor
+    - Workflow `on-request-pr.yml` implementado
+    - Valida con Spectral linter
+    - Crea CRQ en Helix (simulado en MVP)
+    - Almacena API en `apis/` tras aprobación
+    - Comenta en PRs con resultado
+
 ### Pendiente
 
-1. **Workflow Executor JAR** (backend)
-   - Interceptar evento de publicación de API
-   - Llamar a GitHub API para crear PR
-   - Llamar a Helix API para crear CRQ
-   - Actualizar estado en frontend
+1. **Configurar secrets en GitHub**
+   - WSO2-Processor: `WSO2_BASE_URL`, `WSO2_USERNAME`, `WSO2_PASSWORD`, `GIT_HELIX_PAT`
+   - GIT-Helix-Processor: `HELIX_API_URL`, `HELIX_TOKEN`
 
-3. **WSO2-Processor** (GitHub Actions)
-   - Escuchar eventos de PR
-   - Validar definición de API
-   - Notificar resultado
+2. **Recompilar Publisher**
+   - Ejecutar `./scripts/build-publisher.sh`
+   - Reiniciar WSO2 con `docker compose restart wso2-apim`
 
-4. **GIT-Helix-Processor**
-   - Integración bidireccional Git ↔ Helix
+3. **Probar flujo completo**
+   - Configurar token en browser: `localStorage.setItem('github_pat_token', 'ghp_xxx')`
+   - Publicar API → Lifecycle → "Registrar en UAT"
+   - Verificar workflow en GitHub Actions
+   - Verificar PR en GIT-Helix-Processor
+
+4. **Feedback bidireccional** (futuro)
+   - Actualizar estado en UATRegistration desde GitHub
+   - Opciones: polling, webhooks, o GitHub commit status
 
 ## Arquitectura de Archivos
 
@@ -154,35 +216,44 @@ cp -r site/public/dist/* /path/to/publisher-dropin/
 
 ## Próximos Pasos Inmediatos
 
-1. **Probar el componente UATRegistration**
-   - Limpiar caché del navegador (Ctrl+Shift+Delete / Cmd+Shift+Delete)
-   - Acceder a https://localhost:9443/publisher
-   - Ir a una API publicada → Lifecycle
-   - El botón "Registrar en UAT" debería aparecer
+1. **Configurar secrets en GitHub repos**
+   - Ve a Settings → Secrets and variables → Actions
+   - WSO2-Processor: `GIT_HELIX_PAT` (token con scope `repo`)
+   - Opcional: `WSO2_BASE_URL`, `WSO2_USERNAME`, `WSO2_PASSWORD`
 
-2. **Si funciona:** Implementar el backend (Workflow Executor JAR)
+2. **Recompilar Publisher con GitHub integration**
+   ```bash
+   ./scripts/build-publisher.sh
+   docker compose restart wso2-apim
+   ```
 
-3. **Si no funciona:**
-   - Revisar consola del navegador (F12 → Console)
-   - Verificar Network tab para ver si el bundle se carga
-   - Comprobar que el contenedor tiene el bundle correcto
+3. **Configurar token en browser**
+   - F12 → Console
+   - `localStorage.setItem('github_pat_token', 'ghp_xxx...')`
 
-## Problema del Hash del Bundle (Lección Aprendida)
+4. **Probar flujo completo**
+   - Publicar una API
+   - Ir a Lifecycle → "Registrar en UAT"
+   - Verificar:
+     - GitHub Actions: https://github.com/ISAngelRivera/WSO2-Processor/actions
+     - PR creada: https://github.com/ISAngelRivera/GIT-Helix-Processor/pulls
 
-El `index.jsp` del Publisher (en `pages/`) no está en nuestro dropin - solo montamos `dist/`.
-El JSP contiene el hash hardcodeado del bundle original de WSO2.
+## Repositorios del Proyecto
 
-**Solución temporal:** Copiar nuestro bundle con el nombre esperado:
-```bash
-cd publisher-dropin
-cp index.NUEVO_HASH.bundle.js index.HASH_ORIGINAL.bundle.js
-```
+| Repositorio | URL | Propósito |
+|-------------|-----|-----------|
+| WSO2-APIM-Environment | https://github.com/ISAngelRivera/WSO2-APIM-Environment | Código del Publisher y configuración |
+| WSO2-Processor | https://github.com/ISAngelRivera/WSO2-Processor | Procesa eventos de WSO2, crea PRs |
+| GIT-Helix-Processor | https://github.com/ISAngelRivera/GIT-Helix-Processor | Valida, crea CRQ, almacena APIs |
 
-**Cómo encontrar los hashes:**
-```bash
-# Hash que espera WSO2 (en el contenedor):
-docker exec wso2-apim grep "index\." /home/wso2carbon/wso2am-4.5.0/repository/deployment/server/webapps/publisher/site/public/pages/index.jsp
+## Lecciones Aprendidas
 
-# Hash de nuestro bundle:
-ls publisher-dropin/index.*.bundle.js
-```
+### Hash del Bundle
+El `index.jsp` del Publisher contiene el hash hardcodeado del bundle.
+**Solución:** Montar también `index.jsp` generado por nuestro build.
+
+### GitOps como Backend
+GitHub Actions puede servir como "backend" sin necesidad de servidor adicional:
+- `workflow_dispatch` recibe eventos
+- GitHub API crea PRs
+- Workflows procesan PRs automáticamente

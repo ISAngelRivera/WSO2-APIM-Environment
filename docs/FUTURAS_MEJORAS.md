@@ -128,6 +128,56 @@ Documento para registrar ideas y mejoras que no entran en el MVP pero podrían s
 
 ---
 
+---
+
+## Arquitectura / Vendor Agnostic
+
+### Adaptadores para otros API Managers
+- **Descripción**: Crear `Apigee-Processor`, `Kong-Processor`, etc. que hablen con GIT-Helix-Processor
+- **Valor**: Cambiar de WSO2 a otro vendor sin tocar GIT-Helix-Processor
+- **Complejidad**: Media por adaptador
+- **Patrón**: Cada Processor traduce su formato nativo → formato estándar de request
+
+### Contract Testing entre Processors
+- **Descripción**: Tests automáticos que validen que WSO2-Processor genera PRs en el formato esperado por GIT-Helix-Processor
+- **Valor**: Evitar roturas silenciosas en la integración
+- **Complejidad**: Media
+
+### Multi-tenant / Multi-org
+- **Descripción**: Soportar múltiples organizaciones, cada una con su propio GIT-Helix-Processor
+- **Valor**: Escalabilidad para empresas grandes
+- **Complejidad**: Alta
+
+---
+
+## Seguridad
+
+### Firma de requests
+- **Descripción**: Firmar digitalmente los requests desde WSO2-Processor para que GIT-Helix-Processor verifique autenticidad
+- **Valor**: Prevenir requests falsificados
+- **Complejidad**: Media
+
+### Audit log inmutable
+- **Descripción**: Guardar log de todas las operaciones en un sistema append-only (ej: blockchain-lite o S3 con Object Lock)
+- **Valor**: Cumplimiento normativo estricto
+- **Complejidad**: Alta
+
+---
+
+## Observabilidad
+
+### Tracing distribuido
+- **Descripción**: Correlation ID que viaje desde el botón hasta Helix, visible en cada paso
+- **Valor**: Debugging de problemas complejos
+- **Complejidad**: Media
+
+### SLA Dashboard
+- **Descripción**: Medir tiempo promedio de cada paso (export, lint, CRQ approval, etc.)
+- **Valor**: Identificar cuellos de botella
+- **Complejidad**: Media
+
+---
+
 ## Notas
 
 - Las complejidades son estimaciones iniciales
@@ -136,4 +186,4 @@ Documento para registrar ideas y mejoras que no entran en el MVP pero podrían s
 
 ---
 
-*Última actualización: 2024-01-15*
+*Última actualización: 2024-12-04*
