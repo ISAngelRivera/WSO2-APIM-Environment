@@ -32,6 +32,8 @@ services:
       - ./publisher-dropin:/home/wso2carbon/wso2am-4.5.0/repository/deployment/server/webapps/publisher/site/public/dist:ro
       # APIOps: index.jsp con el hash correcto del bundle
       - ./publisher-dropin-pages/index.jsp:/home/wso2carbon/wso2am-4.5.0/repository/deployment/server/webapps/publisher/site/public/pages/index.jsp:ro
+      # APIOps: Configuración externa (GitHub token, feature flags)
+      - ./publisher-config/apiops-config.js:/home/wso2carbon/wso2am-4.5.0/repository/deployment/server/webapps/publisher/site/public/conf/apiops-config.js:ro
     environment:
       - TZ=Europe/Madrid
     healthcheck:
@@ -41,6 +43,38 @@ services:
       retries: 10
       start_period: 120s
     restart: unless-stopped
+
+  # ============================================
+  # GitHub Actions Self-Hosted Runner
+  # ============================================
+  # Runner dockerizado para ejecutar workflows de APIOps
+  # Puede acceder a WSO2 via la red de Docker (wso2-apim:9443)
+  #
+  # IMPORTANTE: Antes de iniciar, configurar las variables en .env:
+  #   GITHUB_TOKEN=ghp_xxx...
+  #   GITHUB_OWNER=ISAngelRivera
+  #   GITHUB_REPO=WSO2-Processor
+  #
+  github-runner:
+    build:
+      context: ./github-runner
+      dockerfile: Dockerfile
+    container_name: github-runner
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITHUB_OWNER=${GITHUB_OWNER:-ISAngelRivera}
+      - GITHUB_REPO=${GITHUB_REPO:-WSO2-Processor}
+      - RUNNER_NAME=apiops-runner-docker
+      - RUNNER_LABELS=self-hosted,linux,x64,apiops
+      # WSO2 accesible desde el runner via Docker network
+      - WSO2_BASE_URL=https://wso2-apim:9443
+    depends_on:
+      wso2-apim:
+        condition: service_healthy
+    restart: unless-stopped
+    # El runner necesita acceso a Docker para algunos workflows (opcional)
+    # volumes:
+    #   - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
   wso2-apim-data:

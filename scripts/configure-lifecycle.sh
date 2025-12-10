@@ -1,10 +1,11 @@
 #!/bin/bash
 #
 # configure-lifecycle.sh
-# Configura el lifecycle customizado en WSO2 APIM vía Admin API
+# Configura el lifecycle estándar en WSO2 APIM vía Admin API
 #
-# Este script añade el estado "Registered UAT" al lifecycle de APIs
-# permitiendo transiciones desde Published → Registered UAT
+# Este script configura el lifecycle estándar de WSO2.
+# El registro en UAT se maneja a través del componente React UATRegistration,
+# NO a través del lifecycle.
 #
 # Uso: ./scripts/configure-lifecycle.sh
 
@@ -14,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONTAINER_NAME="wso2-apim"
 
 echo "════════════════════════════════════════════════════════════"
-echo "  Configurando Lifecycle Custom en WSO2 APIM"
+echo "  Configurando Lifecycle en WSO2 APIM"
 echo "════════════════════════════════════════════════════════════"
 echo ""
 
@@ -53,41 +54,19 @@ CURRENT_CONFIG=$(curl -s -k -X GET \
   "https://localhost:9443/api/am/admin/v4/tenant-config" \
   -H "Authorization: Bearer $TOKEN")
 
-# Verificar si ya tiene el lifecycle configurado
-HAS_LIFECYCLE=$(echo "$CURRENT_CONFIG" | python3 -c "
-import sys, json
-data = json.load(sys.stdin)
-if 'LifeCycle' in data:
-    states = [s['State'] for s in data['LifeCycle'].get('States', [])]
-    if 'Registered UAT' in states:
-        print('yes')
-    else:
-        print('update')
-else:
-    print('no')
-")
-
-if [ "$HAS_LIFECYCLE" == "yes" ]; then
-    echo "  ✓ Lifecycle ya configurado con 'Registered UAT'"
-    echo ""
-    echo "════════════════════════════════════════════════════════════"
-    echo "  Lifecycle ya está configurado!"
-    echo "════════════════════════════════════════════════════════════"
-    exit 0
-fi
-
-echo "  Lifecycle necesita actualización"
+echo "  ✓ Configuración obtenida"
 
 echo ""
-echo "[3/3] Actualizando tenant-config con LifeCycle..."
+echo "[3/3] Configurando lifecycle estándar..."
 
-# Añadir LifeCycle al config
+# Añadir LifeCycle estándar (sin Register UAT)
 NEW_CONFIG=$(echo "$CURRENT_CONFIG" | python3 -c "
 import sys, json
 
 config = json.load(sys.stdin)
 
-# Lifecycle customizado con Register UAT
+# Lifecycle estándar de WSO2 - SIN Register UAT
+# El registro en UAT se hace via componente React UATRegistration
 config['LifeCycle'] = {
     'States': [
         {
@@ -120,15 +99,7 @@ config['LifeCycle'] = {
                 {'Event': 'Deploy as a Prototype', 'Target': 'Prototyped'},
                 {'Event': 'Demote to Created', 'Target': 'Created'},
                 {'Event': 'Deprecate', 'Target': 'Deprecated'},
-                {'Event': 'Publish', 'Target': 'Published'},
-                {'Event': 'Register UAT', 'Target': 'Registered UAT'}
-            ]
-        },
-        {
-            'State': 'Registered UAT',
-            'Transitions': [
-                {'Event': 'Demote to Published', 'Target': 'Published'},
-                {'Event': 'Deprecate', 'Target': 'Deprecated'}
+                {'Event': 'Publish', 'Target': 'Published'}
             ]
         },
         {
@@ -173,8 +144,8 @@ echo "════════════════════════�
 echo "  ✓ Lifecycle configurado correctamente!"
 echo "════════════════════════════════════════════════════════════"
 echo ""
-echo "  El botón 'Register UAT' ahora está disponible para APIs"
-echo "  en estado 'Published'."
+echo "  Estados disponibles: Created → Published → Deprecated → Retired"
 echo ""
-echo "  Flujo: Created → Published → Registered UAT"
+echo "  NOTA: El registro en UAT se realiza a través del componente"
+echo "        'Registro en UAT' en la página de Lifecycle del Publisher."
 echo ""

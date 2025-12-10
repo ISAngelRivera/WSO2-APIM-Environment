@@ -1,13 +1,13 @@
 #!/bin/bash
 #
 # verify-lifecycle.sh
-# Verifica que el lifecycle customizado esté configurado en el tenant-config
+# Verifica que el lifecycle estándar esté configurado en el tenant-config
 #
 # Uso: ./scripts/verify-lifecycle.sh
 
 set -e
 
-echo "Verificando lifecycle customizado..."
+echo "Verificando lifecycle estándar..."
 
 # Registrar cliente OAuth
 CLIENT_RESPONSE=$(curl -s -k -X POST \
@@ -36,7 +36,7 @@ if [ -z "$TOKEN" ]; then
     exit 1
 fi
 
-# Verificar que el lifecycle tiene Register UAT
+# Verificar que el lifecycle tiene los estados estándar
 RESULT=$(curl -s -k -X GET \
   "https://localhost:9443/api/am/admin/v4/tenant-config" \
   -H "Authorization: Bearer $TOKEN" | python3 -c "
@@ -46,42 +46,54 @@ if 'LifeCycle' not in data:
     print('no_lifecycle')
 else:
     states = [s['State'] for s in data['LifeCycle'].get('States', [])]
-    if 'Registered UAT' in states:
-        # Verificar transiciones desde Published
-        for state in data['LifeCycle']['States']:
-            if state['State'] == 'Published':
-                transitions = [t['Event'] for t in state.get('Transitions', [])]
-                if 'Register UAT' in transitions:
-                    print('ok')
-                else:
-                    print('missing_transition')
-                break
+    required_states = {'Created', 'Published', 'Blocked', 'Deprecated', 'Retired'}
+
+    if required_states.issubset(set(states)):
+        # Verificar que NO existe Register UAT (estado obsoleto)
+        if 'Registered UAT' in states:
+            print('has_old_state')
+        else:
+            # Verificar transiciones desde Published
+            for state in data['LifeCycle']['States']:
+                if state['State'] == 'Published':
+                    transitions = [t['Event'] for t in state.get('Transitions', [])]
+                    if 'Publish' in transitions and 'Deprecate' in transitions:
+                        print('ok')
+                    else:
+                        print('missing_transitions')
+                    break
     else:
-        print('missing_state')
+        missing = required_states - set(states)
+        print(f'missing_states:{list(missing)}')
 " 2>/dev/null)
 
 case "$RESULT" in
     "ok")
-        echo "  ✓ Lifecycle configurado correctamente"
+        echo "  ✓ Lifecycle estándar configurado correctamente"
         echo ""
         echo "  Estados disponibles:"
-        echo "    Created → Published → Registered UAT"
+        echo "    Created → Published → Blocked → Deprecated → Retired"
         echo ""
-        echo "  Transición disponible en Published:"
-        echo "    - Register UAT → Registered UAT"
+        echo "  NOTA: El registro en UAT se realiza desde el componente React"
+        echo "        en la página de Lifecycle del Publisher."
         ;;
     "no_lifecycle")
         echo "  ✗ ERROR: LifeCycle no configurado en tenant-config"
         echo "    Ejecuta: ./scripts/configure-lifecycle.sh"
         exit 1
         ;;
-    "missing_state")
-        echo "  ✗ ERROR: Estado 'Registered UAT' no encontrado"
+    "has_old_state")
+        echo "  ✗ ERROR: Se encontró estado obsoleto 'Registered UAT'"
         echo "    Ejecuta: ./scripts/configure-lifecycle.sh"
         exit 1
         ;;
-    "missing_transition")
-        echo "  ✗ ERROR: Transición 'Register UAT' no encontrada en Published"
+    missing_states:*)
+        echo "  ✗ ERROR: Estados faltantes: ${RESULT#missing_states:}"
+        echo "    Ejecuta: ./scripts/configure-lifecycle.sh"
+        exit 1
+        ;;
+    "missing_transitions")
+        echo "  ✗ ERROR: Transiciones faltantes en estado Published"
         echo "    Ejecuta: ./scripts/configure-lifecycle.sh"
         exit 1
         ;;

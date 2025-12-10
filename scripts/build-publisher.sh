@@ -69,7 +69,28 @@ mkdir -p "$DROPIN_DIR"
 mkdir -p "$DROPIN_PAGES_DIR"
 rm -rf "$DROPIN_DIR"/*
 cp -r site/public/dist/* "$DROPIN_DIR/"
-cp site/public/pages/index.jsp "$DROPIN_PAGES_DIR/"
+
+# Actualizar el hash del bundle en index.jsp sin sobrescribir personalizaciones
+NEW_BUNDLE=$(ls site/public/dist/index.*.bundle.js | xargs basename)
+if [ -f "$DROPIN_PAGES_DIR/index.jsp" ]; then
+    echo ">>> Actualizando hash del bundle en index.jsp existente..."
+    # Reemplazar el hash del bundle manteniendo las personalizaciones
+    sed -i.bak "s/index\.[a-f0-9]*\.bundle\.js/${NEW_BUNDLE}/g" "$DROPIN_PAGES_DIR/index.jsp"
+    rm -f "$DROPIN_PAGES_DIR/index.jsp.bak"
+
+    # Verificar que apiops-config.js está presente, si no, añadirlo
+    if ! grep -q "apiops-config.js" "$DROPIN_PAGES_DIR/index.jsp"; then
+        echo ">>> Añadiendo apiops-config.js a index.jsp..."
+        sed -i.bak 's|<script src="<%= context%>/site/public/conf/portalSettings.js"></script>|<script src="<%= context%>/site/public/conf/portalSettings.js"></script>\n        <!-- APIOps Configuration for GitHub integration -->\n        <script src="<%= context%>/site/public/conf/apiops-config.js"></script>|' "$DROPIN_PAGES_DIR/index.jsp"
+        rm -f "$DROPIN_PAGES_DIR/index.jsp.bak"
+    fi
+else
+    echo ">>> Creando index.jsp con personalizaciones APIOps..."
+    cp site/public/pages/index.jsp "$DROPIN_PAGES_DIR/"
+    # Añadir apiops-config.js
+    sed -i.bak 's|<script src="<%= context%>/site/public/conf/portalSettings.js"></script>|<script src="<%= context%>/site/public/conf/portalSettings.js"></script>\n        <!-- APIOps Configuration for GitHub integration -->\n        <script src="<%= context%>/site/public/conf/apiops-config.js"></script>|' "$DROPIN_PAGES_DIR/index.jsp"
+    rm -f "$DROPIN_PAGES_DIR/index.jsp.bak"
+fi
 
 echo ""
 echo "=============================================="

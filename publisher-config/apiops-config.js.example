@@ -1,0 +1,30 @@
+// APIOps Configuration for Publisher
+// This file is loaded by the Publisher and provides runtime configuration
+// for the UATRegistration component.
+//
+// SETUP:
+// 1. Copy this file to apiops-config.js
+// 2. Replace 'YOUR_GITHUB_TOKEN_HERE' with your actual GitHub PAT
+//
+// The token needs 'repo' scope to trigger workflows.
+// Create at: https://github.com/settings/tokens
+//
+window.APIOpsConfig = {
+    github: {
+        // Token for triggering GitHub workflows
+        // Required scope: repo
+        token: 'YOUR_GITHUB_TOKEN_HERE',
+
+        // WSO2-Processor repository configuration
+        owner: 'ISAngelRivera',
+        repo: 'WSO2-Processor',
+        workflow: 'receive-uat-request.yml',
+    },
+
+    // Feature flags
+    features: {
+        uatRegistration: true,
+        nftPromotion: false,  // Future
+        proPromotion: false,  // Future
+    },
+};

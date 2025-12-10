@@ -18,15 +18,26 @@ temp/
 # Código fuente de WSO2 (se clona con git clone)
 wso2-source/
 
-# Bundle compilado del Publisher (se genera con pnpm build)
-publisher-dropin/
-
-# index.jsp generado (se genera con el build)
-publisher-dropin-pages/
-
 # Intentos anteriores (ya no se usan)
 publisher-custom/
 publisher-override/
 
 # Node modules (si existieran localmente)
 node_modules/
+
+# ============================================
+# Secretos - NUNCA commitear
+# ============================================
+
+# Variables de entorno con tokens
+.env
+
+# Configuración con token real (usar .example como base)
+publisher-config/apiops-config.js
+
+# ============================================
+# Archivos grandes generados (opcional ignorar)
+# ============================================
+# Descomentar si no quieres los bundles en git:
+# publisher-dropin/
+# publisher-dropin-pages/

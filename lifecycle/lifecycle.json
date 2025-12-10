@@ -60,26 +60,9 @@
                     {
                         "Target": "Published",
                         "Event": "Publish"
-                    },
-                    {
-                        "Target": "Registered UAT",
-                        "Event": "Register UAT"
                     }
                 ],
                 "State": "Published"
-            },
-            {
-                "Transitions": [
-                    {
-                        "Target": "Published",
-                        "Event": "Demote to Published"
-                    },
-                    {
-                        "Target": "Deprecated",
-                        "Event": "Deprecate"
-                    }
-                ],
-                "State": "Registered UAT"
             },
             {
                 "Transitions": [

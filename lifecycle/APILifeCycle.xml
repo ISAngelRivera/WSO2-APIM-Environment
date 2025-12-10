@@ -1,6 +1,6 @@
 <!--
- ~ Custom API Lifecycle for APIOps
- ~ Adds "Register UAT" button for GitOps integration
+ ~ Standard WSO2 API Lifecycle
+ ~ NO custom buttons - UAT registration is handled by the React component UATRegistration.jsx
  -->
 <aspect name="APILifeCycle" class="org.wso2.carbon.governance.registry.extensions.aspects.DefaultLifeCycle">
     <configuration type="literal">
@@ -54,7 +54,6 @@
                     <transition event="Deploy as a Prototype" target="Prototyped"/>
                 </state>
 
-                <!-- PUBLISHED: Estado principal donde aparece el botón Register UAT -->
                 <state id="Published">
                     <datamodel>
                         <data name="transitionExecution">
@@ -73,10 +72,6 @@
                             <execution forEvent="Publish"
                                        class="org.wso2.carbon.apimgt.impl.executors.APIExecutor">
                             </execution>
-                            <!-- NUEVO: Botón para registrar en UAT -->
-                            <execution forEvent="Register UAT"
-                                       class="org.wso2.carbon.apimgt.impl.executors.APIExecutor">
-                            </execution>
                         </data>
                     </datamodel>
                     <transition event="Block" target="Blocked"/>
@@ -84,64 +79,6 @@
                     <transition event="Demote to Created" target="Created"/>
                     <transition event="Deprecate" target="Deprecated"/>
                     <transition event="Publish" target="Published"/>
-                    <!-- NUEVO: Transición a Registered UAT -->
-                    <transition event="Register UAT" target="Registered UAT"/>
-                </state>
-
-                <!-- NUEVO: Estado después de registrar en UAT -->
-                <state id="Registered UAT">
-                    <datamodel>
-                        <data name="transitionExecution">
-                            <execution forEvent="Promote to NFT"
-                                       class="org.wso2.carbon.apimgt.impl.executors.APIExecutor">
-                            </execution>
-                            <execution forEvent="Demote to Published"
-                                       class="org.wso2.carbon.apimgt.impl.executors.APIExecutor">
-                            </execution>
-                            <execution forEvent="Deprecate"
-                                       class="org.wso2.carbon.apimgt.impl.executors.APIExecutor">
-                            </execution>
-                        </data>
-                    </datamodel>
-                    <transition event="Promote to NFT" target="Registered NFT"/>
-                    <transition event="Demote to Published" target="Published"/>
-                    <transition event="Deprecate" target="Deprecated"/>
-                </state>
-
-                <!-- NUEVO: Estado después de registrar en NFT -->
-                <state id="Registered NFT">
-                    <datamodel>
-                        <data name="transitionExecution">
-                            <execution forEvent="Promote to PRO"
-                                       class="org.wso2.carbon.apimgt.impl.executors.APIExecutor">
-                            </execution>
-                            <execution forEvent="Demote to UAT"
-                                       class="org.wso2.carbon.apimgt.impl.executors.APIExecutor">
-                            </execution>
-                            <execution forEvent="Deprecate"
-                                       class="org.wso2.carbon.apimgt.impl.executors.APIExecutor">
-                            </execution>
-                        </data>
-                    </datamodel>
-                    <transition event="Promote to PRO" target="Production"/>
-                    <transition event="Demote to UAT" target="Registered UAT"/>
-                    <transition event="Deprecate" target="Deprecated"/>
-                </state>
-
-                <!-- NUEVO: Estado de Producción -->
-                <state id="Production">
-                    <datamodel>
-                        <data name="transitionExecution">
-                            <execution forEvent="Demote to NFT"
-                                       class="org.wso2.carbon.apimgt.impl.executors.APIExecutor">
-                            </execution>
-                            <execution forEvent="Deprecate"
-                                       class="org.wso2.carbon.apimgt.impl.executors.APIExecutor">
-                            </execution>
-                        </data>
-                    </datamodel>
-                    <transition event="Demote to NFT" target="Registered NFT"/>
-                    <transition event="Deprecate" target="Deprecated"/>
                 </state>
 
                 <state id="Blocked">

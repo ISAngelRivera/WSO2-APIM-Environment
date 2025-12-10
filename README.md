@@ -32,70 +32,48 @@ cd WSO2-APIM-Environment
 | DevPortal | https://localhost:9443/devportal | admin / admin |
 | Carbon Admin | https://localhost:9443/carbon | admin / admin |
 
-## Lifecycle Customizado
+## Flujo APIOps
 
-Este entorno incluye un lifecycle extendido para soportar el flujo APIOps:
+Este entorno implementa un flujo APIOps completo usando el **lifecycle estándar de WSO2** más un **componente React personalizado** para el registro en UAT:
 
 ```
-                    ┌──────────────┐
-                    │   Created    │
-                    └──────┬───────┘
-                           │ Publish
-                           ▼
-                    ┌──────────────┐
-              ┌─────│  Published   │─────┐
-              │     └──────┬───────┘     │
-              │            │             │
-           Block      Register UAT    Deprecate
-              │            │             │
-              ▼            ▼             ▼
-        ┌──────────┐ ┌─────────────┐ ┌───────────┐
-        │ Blocked  │ │Registering  │ │Deprecated │
-        └──────────┘ │    UAT      │ └───────────┘
-                     └──────┬──────┘
-                            │ Complete
-                            ▼
-                     ┌─────────────┐
-                     │Registered   │
-                     │    UAT      │
-                     └──────┬──────┘
-                            │ Promote to NFT
-                            ▼
-                     ┌─────────────┐
-                     │ Promoting   │
-                     │    NFT      │
-                     └──────┬──────┘
-                            │ Complete
-                            ▼
-                     ┌─────────────┐
-                     │Registered   │
-                     │    NFT      │
-                     └──────┬──────┘
-                            │ Promote to PRO
-                            ▼
-                     ┌─────────────┐
-                     │ Promoting   │
-                     │    PRO      │
-                     └──────┬──────┘
-                            │ Complete
-                            ▼
-                     ┌─────────────┐
-                     │ Production  │
-                     └─────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          FLUJO COMPLETO (~30-45s)                        │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  1. Publisher Portal                                                    │
+│     └── Usuario hace clic en "Registrar en UAT"                        │
+│                                                                         │
+│  2. WSO2-Processor (self-hosted runner) [~10s]                         │
+│     ├── Valida API desplegada                                          │
+│     ├── Exporta API con apictl                                         │
+│     └── Valida subdominio configurado                                  │
+│                                                                         │
+│  3. GIT-Helix-Processor [~15s]                                         │
+│     ├── Valida subdominio existe                                       │
+│     ├── Crea Issue (cola de solicitudes)                               │
+│     ├── Guarda artifact (export API)                                   │
+│     └── Simula aprobación Helix                                        │
+│                                                                         │
+│  4. on-helix-approval [~15s]                                           │
+│     ├── Crea PR en repo del subdominio                                 │
+│     ├── Merge automático                                               │
+│     └── Cierra Issue                                                   │
+│                                                                         │
+│  5. Publisher muestra "API registrada correctamente"                   │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Estados del Lifecycle
+### Lifecycle Estándar + Componente UAT
 
-| Estado | Descripción |
-|--------|-------------|
-| Created | API recién creado, pendiente de configuración |
-| Published | API publicado en el Gateway, listo para registrar en Git |
-| Registering UAT | (Transitorio) Registrando en repositorio Git - UAT |
-| Registered UAT | API registrado en Git para UAT |
-| Promoting NFT | (Transitorio) Promoviendo a NFT |
-| Registered NFT | API registrado en Git para NFT |
-| Promoting PRO | (Transitorio) Promoviendo a Producción |
-| Production | API en producción |
+| Estado WSO2 | Componente React | Descripción |
+|-------------|------------------|-------------|
+| Created | - | API recién creado |
+| Published | Muestra "Registrar en UAT" | API listo para registro |
+| Published | Estado: Registrado | API ya registrado en Git |
+
+**Nota:** El registro en UAT NO cambia el estado del lifecycle de WSO2. Se gestiona enteramente a través del componente React UATRegistration.
 
 ## Scripts Disponibles
 
@@ -155,6 +133,60 @@ Este entorno se integra con:
 - **Informatica-DevOps**: Repositorio de ejemplo para dominio Informática
 - **Finanzas-Pagos**: Repositorio de ejemplo para dominio Finanzas
 
+## Desarrollo del Publisher (APIOps)
+
+### Después de modificar el código del Publisher
+
+Cada vez que se modifica el código fuente del Publisher (UATRegistration.jsx, etc.), se debe:
+
+```bash
+# 1. Compilar el Publisher
+cd wso2-source/apim-apps/portals/publisher/src/main/webapp
+pnpm run build:prod
+
+# 2. Copiar los bundles al directorio montado
+rm -rf ../../../../../../publisher-dropin/*
+cp -r site/public/dist/* ../../../../../../publisher-dropin/
+
+# 3. Actualizar el hash en index.jsp (buscar el nuevo hash)
+ls site/public/dist/index.*.bundle.js
+# Editar publisher-dropin-pages/index.jsp con el nuevo hash
+
+# 4. Reiniciar WSO2 para limpiar caché
+docker stop wso2-apim && docker start wso2-apim
+```
+
+### Reset completo (limpia volúmenes)
+
+Cuando se necesita un reset completo (volúmenes corruptos, errores de metadata, etc.):
+
+```bash
+# Esto elimina TODAS las APIs y datos
+docker compose down -v
+docker compose up -d
+
+# Esperar a que esté listo
+./scripts/wait-for-apim.sh
+
+# Recrear las APIs de prueba
+./scripts/create-test-apis.sh
+```
+
+### APIs de Prueba Requeridas
+
+Después de un reset de volúmenes, ejecutar `./scripts/create-test-apis.sh` que crea:
+
+| Subdominio | APIs | Descripción |
+|------------|------|-------------|
+| rrhh-empleados | EmployeeAPI v1.0, v2.0 | Con revisiones, subdominio configurado |
+| finanzas-pagos | PaymentAPI v1.0, v2.0, InvoiceAPI v1.0 | Con revisiones, subdominio configurado |
+| (ninguno) | TestAPI v1.0 | Sin subdominio - para probar validación |
+
+Esto asegura:
+- 3+ APIs por cada repositorio de subdominio
+- Al menos una API con versión 2.x y revisiones
+- Una API sin subdominio para validar errores
+
 ## Troubleshooting
 
 ### El contenedor no arranca
@@ -178,8 +210,41 @@ docker compose restart
 ### Error de memoria
 WSO2 APIM requiere al menos 2GB de RAM. Aumenta la memoria asignada a Docker Desktop.
 
-## Próximos Pasos
+### Error "metadata corrupted" o archivo no encontrado
+```bash
+# Reset completo con limpieza de volúmenes
+docker compose down -v
+docker compose up -d
+./scripts/create-test-apis.sh
+```
 
-- [ ] Configurar webhook para eventos de lifecycle
-- [ ] Integrar con WSO2-Processor
-- [ ] Añadir APIs de prueba adicionales
+### El navegador no muestra los cambios del Publisher
+1. Abrir DevTools (F12)
+2. Pestaña Network > marcar "Disable cache"
+3. Click derecho en recargar > "Empty Cache and Hard Reload"
+
+O usar ventana de incógnito.
+
+## Estado del Proyecto
+
+### Completado (2025-12-09)
+
+- [x] Componente UATRegistration en Publisher
+- [x] Self-hosted runner en Docker
+- [x] WSO2-Processor: extrae APIs y valida
+- [x] GIT-Helix-Processor: sistema de Issues + simulación Helix
+- [x] on-helix-approval: crea PR + auto-merge
+- [x] Polling en dos fases en Publisher
+- [x] Flujo end-to-end funcional (~30-45 segundos)
+- [x] Escalabilidad para 2500+ APIs (requestId único)
+- [x] Manejo de errores específicos en UI
+
+### Pendiente
+
+- [ ] Integración real con Helix ITSM (actualmente simulado)
+- [ ] Gestión de tokens por usuario (OAuth federation)
+- [ ] Linters especializados (Spectral, seguridad)
+
+## Documentación Detallada
+
+Ver [docs/ESTADO_PROYECTO.md](docs/ESTADO_PROYECTO.md) para documentación completa del proyecto.
