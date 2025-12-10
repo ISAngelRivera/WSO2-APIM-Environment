@@ -1,5 +1,27 @@
 # Changelog - WSO2 APIOps Environment
 
+## [2025-12-10] - Squash de Repositorio y Fix Runner
+
+### Changed
+- **Git Squash**: Consolidado historial de commits en un único commit limpio para el POC
+- **Commit final**: `feat: POC completo portable` incluye todos los archivos necesarios
+
+### Fixed
+- **github-runner no iniciaba**: Tras el squash, el contenedor del runner no se construyó automáticamente
+  - **Causa**: Al ejecutar `docker compose up -d`, WSO2 tardó en estar healthy y el runner no se inició
+  - **Solución**: `docker compose up -d github-runner --build`
+- **Workflows legacy causaban errores**: `register-api-uat.yml` y `on-request-pr.yml` eran archivos obsoletos
+  - **Causa**: Workflows antiguos que ya no se usaban pero seguían en el repo
+  - **Solución**: Eliminados de GIT-Helix-Processor
+- **APIs sin desplegar**: Las APIs existían pero no tenían revisiones desplegadas en el Gateway
+  - **Causa**: Al reiniciar WSO2, las revisiones desplegadas se perdieron
+  - **Solución**: Script para crear y desplegar revisiones automáticamente
+
+### Notes
+- Los API IDs son dinámicos y cambian cada vez que se recrean las APIs
+- El Publisher obtiene el API ID correcto en tiempo real, por lo que esto no afecta al flujo normal
+- Flujo E2E verificado y funcionando correctamente tras las correcciones
+
 ## [2025-12-09] - Flujo End-to-End Completo
 
 ### Added
