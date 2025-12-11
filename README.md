@@ -86,9 +86,9 @@ Este entorno implementa un flujo APIOps enterprise con promoción entre entornos
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Estructura de Repos de Dominio
+### Estructura de Repos de Dominio (v3 - Sin Revisiones)
 
-Cada dominio (subdominio) tiene su propio repositorio Git con esta estructura:
+Cada dominio (subdominio) tiene su propio repositorio Git con esta estructura simplificada:
 
 ```
 {Dominio}-{Subdominio}/
@@ -96,15 +96,18 @@ Cada dominio (subdominio) tiene su propio repositorio Git con esta estructura:
     {APIName}/
       state.yaml                    # Estado por entorno (auto-generated)
       {Version}/
-        {rev-N}/
-          api.yaml                  # Definición API (inmutable)
-          Definitions/
-            swagger.yaml            # Contrato OpenAPI
-          Conf/
-            api_meta.yaml           # Metadata de deployment
-            params.yaml             # Configuración UAT/NFT/PRO
-            request.yaml            # Trazabilidad (CRQ, usuario, fecha)
+        api.yaml                    # Definición API (se actualiza en cada registro)
+        Definitions/
+          swagger.yaml              # Contrato OpenAPI
+        Conf/
+          api_meta.yaml             # Metadata de deployment
+          params.yaml               # Configuración UAT/NFT/PRO
+          request.yaml              # Última solicitud (trazabilidad)
 ```
+
+**Comportamiento:**
+- Si la versión NO existe → Se crea la carpeta y archivos
+- Si la versión YA existe → Se sobrescribe (actualiza) con la última exportación
 
 ### params.yaml - Configuración Multi-Entorno
 
@@ -144,22 +147,25 @@ last_updated: 2025-12-11T13:30:00Z
 environments:
   uat:
     version: "1.0.0"
-    revision: "rev-1"
-    status: DEPLOYED
+    status: REGISTERED
+    registered_at: 2025-12-11T12:00:00Z
+    registered_by: dev1
+    helix_crq: CRQ-12345
 
   nft:
-    version: "1.0.0"
-    revision: "rev-1"
-    status: DEPLOYED
+    version: null
+    status: NOT_DEPLOYED
 
   pro:
     version: null
-    revision: null
     status: NOT_DEPLOYED
 
-history:
-  - "2025-12-11T12:00:00Z - DEPLOY rev-1 to uat"
-  - "2025-12-11T13:00:00Z - PROMOTE rev-1 to nft"
+last_registration:
+  request_id: REQ-employee-12345-abc1
+  timestamp: 2025-12-11T12:00:00Z
+  api_version: "1.0.0"
+  crq: CRQ-12345
+  user: dev1
 ```
 
 ### Lifecycle Estándar + Componente UAT
@@ -341,6 +347,7 @@ O usar ventana de incógnito.
 - [x] **state.yaml para tracking de deployments**
 - [x] **Workflow promote-api.yml para promociones**
 - [x] **18 pruebas E2E automatizadas**
+- [x] **Estructura v3 sin revisiones** - Simplificación (cada registro actualiza la versión)
 
 ### Pendiente
 

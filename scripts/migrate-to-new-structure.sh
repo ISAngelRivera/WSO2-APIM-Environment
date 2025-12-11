@@ -1,16 +1,19 @@
 #!/bin/bash
 # =============================================================================
-# Script de Migración a Nueva Estructura Multi-Entorno
+# Script de Migración a Estructura Simplificada (v3 - Sin Revisiones)
 # =============================================================================
-# Migra la estructura antigua:
-#   apis/{API}/{Ver}/revisions/rev-{N}/{API}-{Ver}/...
+# Migra cualquier estructura anterior a:
+#   apis/{APIName}/
+#     state.yaml
+#     {Version}/
+#       api.yaml
+#       Definitions/swagger.yaml
+#       Conf/
+#         api_meta.yaml
+#         params.yaml
+#         request.yaml
 #
-# A la nueva estructura:
-#   apis/{API}/state.yaml
-#   apis/{API}/{Ver}/rev-{N}/api.yaml
-#   apis/{API}/{Ver}/rev-{N}/Definitions/swagger.yaml
-#   apis/{API}/{Ver}/rev-{N}/Conf/api_meta.yaml
-#   apis/{API}/{Ver}/rev-{N}/Conf/params.yaml
+# Uso: ./migrate-to-new-structure.sh [ruta-repo]
 # =============================================================================
 
 set -e
@@ -18,7 +21,7 @@ set -e
 REPO_PATH="${1:-.}"
 
 echo "=============================================="
-echo "  Migración a Nueva Estructura Multi-Entorno"
+echo "  Migración a Estructura v3 (Sin Revisiones)"
 echo "=============================================="
 echo ""
 echo "Repo: ${REPO_PATH}"
@@ -29,51 +32,6 @@ if [ ! -d "${REPO_PATH}/apis" ]; then
     echo "ERROR: No existe carpeta apis/ en ${REPO_PATH}"
     exit 1
 fi
-
-# Función para convertir JSON a YAML (simplificado)
-json_to_yaml() {
-    local json_file="$1"
-    local yaml_file="$2"
-
-    if command -v yq &> /dev/null; then
-        yq -P < "$json_file" > "$yaml_file"
-    elif command -v python3 &> /dev/null; then
-        python3 -c "
-import json, sys
-import yaml if 'yaml' in dir() else None
-
-with open('$json_file', 'r') as f:
-    data = json.load(f)
-
-# Simple YAML output
-def to_yaml(data, indent=0):
-    result = ''
-    prefix = '  ' * indent
-    if isinstance(data, dict):
-        for k, v in data.items():
-            if isinstance(v, (dict, list)):
-                result += f'{prefix}{k}:\n{to_yaml(v, indent+1)}'
-            else:
-                val = v if v is not None else ''
-                if isinstance(val, str) and (':' in val or '#' in val or val == ''):
-                    val = f'\"{val}\"'
-                result += f'{prefix}{k}: {val}\n'
-    elif isinstance(data, list):
-        for item in data:
-            if isinstance(item, (dict, list)):
-                result += f'{prefix}-\n{to_yaml(item, indent+1)}'
-            else:
-                result += f'{prefix}- {item}\n'
-    return result
-
-print(to_yaml(data))
-" > "$yaml_file"
-    else
-        # Fallback: copiar JSON como está
-        cp "$json_file" "$yaml_file"
-        echo "WARN: No se pudo convertir a YAML, copiado como JSON"
-    fi
-}
 
 # Generar params.yaml template
 generate_params_yaml() {
@@ -86,7 +44,7 @@ generate_params_yaml() {
 # =============================================================================
 # ${api_name} ${version} - Configuración por Entorno
 # =============================================================================
-# Formato: WSO2 apictl params.yaml nativo
+# Última actualización: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 # =============================================================================
 
 environments:
@@ -185,32 +143,25 @@ generate_state_yaml() {
 # =============================================================================
 # ${api_name} - Estado de Deployments por Entorno
 # =============================================================================
-# ARCHIVO AUTO-GENERADO por GIT-Helix-Processor
-# NO EDITAR MANUALMENTE
+# ARCHIVO AUTO-GENERADO
+# Se actualiza en cada registro
 # =============================================================================
 
 api_name: ${api_name}
 last_updated: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 
-# Estado actual en cada entorno
 environments:
   uat:
     version: null
-    revision: null
     status: NOT_DEPLOYED
 
   nft:
     version: null
-    revision: null
     status: NOT_DEPLOYED
 
   pro:
     version: null
-    revision: null
     status: NOT_DEPLOYED
-
-# Historial de operaciones
-history: []
 EOF
 }
 
@@ -227,7 +178,7 @@ for api_dir in "${REPO_PATH}/apis"/*/; do
 
     echo "Procesando API: ${API_NAME}"
 
-    # Crear state.yaml a nivel de API
+    # Crear state.yaml a nivel de API si no existe
     if [ ! -f "${api_dir}/state.yaml" ]; then
         generate_state_yaml "$API_NAME" "${api_dir}/state.yaml"
         echo "  ✓ Creado state.yaml"
@@ -238,76 +189,141 @@ for api_dir in "${REPO_PATH}/apis"/*/; do
         [ -d "$version_dir" ] || continue
 
         VERSION=$(basename "$version_dir")
-        [ "$VERSION" == "state.yaml" ] && continue
+        # Saltar archivos y carpetas especiales
+        [[ "$VERSION" == "state.yaml" || "$VERSION" == ".gitkeep" ]] && continue
 
         echo "  Versión: ${VERSION}"
 
-        # Buscar estructura antigua: revisions/rev-N/{API}-{Ver}/
+        # =====================================================================
+        # Caso 1: Estructura v2 con revisiones (apis/API/Ver/rev-N/)
+        # =====================================================================
+        HAS_REVISIONS=false
+        for rev_candidate in "${version_dir}"/rev-*/; do
+            if [ -d "$rev_candidate" ]; then
+                HAS_REVISIONS=true
+                break
+            fi
+        done
+
+        if [ "$HAS_REVISIONS" == "true" ]; then
+            echo "    Detectada estructura v2 con revisiones"
+
+            # Tomar la última revisión
+            LATEST_REV=$(ls -d "${version_dir}"/rev-*/ 2>/dev/null | sort -V | tail -1)
+
+            if [ -n "$LATEST_REV" ] && [ -d "$LATEST_REV" ]; then
+                REV_NAME=$(basename "$LATEST_REV")
+                echo "    Usando revisión: ${REV_NAME}"
+
+                # Mover contenido de la revisión al nivel de versión
+                # Primero copiamos Definitions y Conf si existen
+                if [ -d "${LATEST_REV}/Definitions" ]; then
+                    mkdir -p "${version_dir}/Definitions"
+                    cp -r "${LATEST_REV}/Definitions/"* "${version_dir}/Definitions/" 2>/dev/null || true
+                    echo "    ✓ Definitions/"
+                fi
+
+                if [ -d "${LATEST_REV}/Conf" ]; then
+                    mkdir -p "${version_dir}/Conf"
+                    cp -r "${LATEST_REV}/Conf/"* "${version_dir}/Conf/" 2>/dev/null || true
+                    echo "    ✓ Conf/"
+                fi
+
+                # Copiar api.yaml
+                if [ -f "${LATEST_REV}/api.yaml" ]; then
+                    cp "${LATEST_REV}/api.yaml" "${version_dir}/api.yaml"
+                    echo "    ✓ api.yaml"
+                fi
+
+                # Eliminar todas las revisiones
+                rm -rf "${version_dir}"/rev-*/
+                echo "    ✓ Eliminadas revisiones"
+
+                ((MIGRATED++))
+            fi
+        fi
+
+        # =====================================================================
+        # Caso 2: Estructura antigua (apis/API/Ver/revisions/rev-N/API-Ver/)
+        # =====================================================================
         OLD_REVISIONS_DIR="${version_dir}/revisions"
 
         if [ -d "$OLD_REVISIONS_DIR" ]; then
-            for rev_dir in "${OLD_REVISIONS_DIR}"/rev-*/; do
-                [ -d "$rev_dir" ] || continue
+            echo "    Detectada estructura antigua (revisions/)"
 
-                REV_NAME=$(basename "$rev_dir")
-                echo "    Revisión: ${REV_NAME}"
+            # Tomar la última revisión
+            LATEST_REV=$(ls -d "${OLD_REVISIONS_DIR}"/rev-*/ 2>/dev/null | sort -V | tail -1)
 
-                # Nueva ubicación
-                NEW_REV_DIR="${version_dir}/${REV_NAME}"
+            if [ -n "$LATEST_REV" ] && [ -d "$LATEST_REV" ]; then
+                REV_NAME=$(basename "$LATEST_REV")
+                echo "    Usando revisión: ${REV_NAME}"
 
                 # Buscar carpeta interna {API}-{Ver}/
-                OLD_API_DIR="${rev_dir}/${API_NAME}-${VERSION}"
+                OLD_API_DIR="${LATEST_REV}/${API_NAME}-${VERSION}"
 
                 if [ -d "$OLD_API_DIR" ]; then
-                    # Crear nueva estructura
-                    mkdir -p "${NEW_REV_DIR}/Definitions"
-                    mkdir -p "${NEW_REV_DIR}/Conf"
+                    # Crear estructura destino
+                    mkdir -p "${version_dir}/Definitions"
+                    mkdir -p "${version_dir}/Conf"
 
-                    # Mover/convertir api.json -> api.yaml
+                    # Mover/copiar archivos
                     if [ -f "${OLD_API_DIR}/api.json" ]; then
-                        # Por ahora copiamos el JSON, el workflow lo manejará
-                        cp "${OLD_API_DIR}/api.json" "${NEW_REV_DIR}/api.yaml"
-                        echo "      ✓ api.yaml (desde api.json)"
-
-                        # Extraer endpoint URL para params
-                        ENDPOINT_URL=$(grep -o '"url"[[:space:]]*:[[:space:]]*"[^"]*"' "${OLD_API_DIR}/api.json" | head -1 | sed 's/.*"url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+                        cp "${OLD_API_DIR}/api.json" "${version_dir}/api.yaml"
+                        echo "    ✓ api.yaml (desde api.json)"
                     fi
 
-                    # Mover swagger
                     if [ -f "${OLD_API_DIR}/Definitions/swagger.json" ]; then
-                        cp "${OLD_API_DIR}/Definitions/swagger.json" "${NEW_REV_DIR}/Definitions/swagger.yaml"
-                        echo "      ✓ swagger.yaml"
+                        cp "${OLD_API_DIR}/Definitions/swagger.json" "${version_dir}/Definitions/swagger.yaml"
+                        echo "    ✓ swagger.yaml"
+                    elif [ -f "${OLD_API_DIR}/Definitions/swagger.yaml" ]; then
+                        cp "${OLD_API_DIR}/Definitions/swagger.yaml" "${version_dir}/Definitions/swagger.yaml"
+                        echo "    ✓ swagger.yaml"
                     fi
 
-                    # Mover api_meta.yaml
                     if [ -f "${OLD_API_DIR}/api_meta.yaml" ]; then
-                        cp "${OLD_API_DIR}/api_meta.yaml" "${NEW_REV_DIR}/Conf/api_meta.yaml"
-                        echo "      ✓ api_meta.yaml"
+                        cp "${OLD_API_DIR}/api_meta.yaml" "${version_dir}/Conf/api_meta.yaml"
+                        echo "    ✓ api_meta.yaml"
                     fi
 
-                    # Generar params.yaml
-                    generate_params_yaml "$API_NAME" "$VERSION" "${NEW_REV_DIR}/Conf/params.yaml" "$ENDPOINT_URL"
-                    echo "      ✓ params.yaml (generado)"
+                    # Extraer endpoint URL para params
+                    ENDPOINT_URL=""
+                    if [ -f "${OLD_API_DIR}/api.json" ]; then
+                        ENDPOINT_URL=$(grep -o '"url"[[:space:]]*:[[:space:]]*"[^"]*"' "${OLD_API_DIR}/api.json" | head -1 | sed 's/.*"url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' 2>/dev/null || true)
+                    fi
 
-                    # Copiar request.yaml si existe (trazabilidad)
-                    if [ -f "${rev_dir}/request.yaml" ]; then
-                        cp "${rev_dir}/request.yaml" "${NEW_REV_DIR}/Conf/request.yaml"
-                        echo "      ✓ request.yaml (trazabilidad)"
+                    # Generar params.yaml si no existe
+                    if [ ! -f "${version_dir}/Conf/params.yaml" ]; then
+                        generate_params_yaml "$API_NAME" "$VERSION" "${version_dir}/Conf/params.yaml" "$ENDPOINT_URL"
+                        echo "    ✓ params.yaml (generado)"
+                    fi
+
+                    # Copiar request.yaml si existe
+                    if [ -f "${LATEST_REV}/request.yaml" ]; then
+                        cp "${LATEST_REV}/request.yaml" "${version_dir}/Conf/request.yaml"
+                        echo "    ✓ request.yaml"
                     fi
 
                     ((MIGRATED++))
                 else
-                    echo "      ✗ No se encontró estructura antigua en ${OLD_API_DIR}"
+                    echo "    ✗ No se encontró estructura en ${OLD_API_DIR}"
                     ((ERRORS++))
                 fi
-            done
+            fi
 
             # Eliminar estructura antigua
             echo "    Eliminando estructura antigua..."
             rm -rf "$OLD_REVISIONS_DIR"
             echo "    ✓ Eliminado revisions/"
-        else
-            echo "    (Sin estructura antigua que migrar)"
+        fi
+
+        # =====================================================================
+        # Caso 3: Ya tiene estructura correcta - solo verificar params.yaml
+        # =====================================================================
+        if [ -f "${version_dir}/api.yaml" ] && [ ! -f "${version_dir}/Conf/params.yaml" ]; then
+            mkdir -p "${version_dir}/Conf"
+            generate_params_yaml "$API_NAME" "$VERSION" "${version_dir}/Conf/params.yaml"
+            echo "    ✓ params.yaml (generado para estructura existente)"
+            ((MIGRATED++))
         fi
     done
 
@@ -317,7 +333,7 @@ done
 echo "=============================================="
 echo "  Migración Completada"
 echo "=============================================="
-echo "  Revisiones migradas: ${MIGRATED}"
+echo "  Versiones migradas: ${MIGRATED}"
 echo "  Errores: ${ERRORS}"
 echo "=============================================="
 
