@@ -1,11 +1,12 @@
 # WSO2-APIM-Environment
 
-Entorno de desarrollo Docker para WSO2 API Manager 4.5.0 con lifecycle customizado para APIOps.
+Entorno de desarrollo Docker para WSO2 API Manager 4.5.0 con flujo APIOps enterprise multi-entorno (UAT → NFT → PRO).
 
 ## Requisitos
 
 - Docker Desktop
 - 4GB RAM mínimo disponible para Docker
+- GitHub CLI (`gh`) configurado
 
 ## Inicio Rápido
 
@@ -32,9 +33,27 @@ cd WSO2-APIM-Environment
 | DevPortal | https://localhost:9443/devportal | admin / admin |
 | Carbon Admin | https://localhost:9443/carbon | admin / admin |
 
+## Arquitectura Multi-Entorno
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      ENTORNOS DE DEPLOYMENT                              │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│   UAT (Desarrollo/Testing)  →  NFT (Pre-producción)  →  PRO (Producción)│
+│                                                                         │
+│   Cada API tiene configuración específica por entorno:                  │
+│   - Endpoints (backend URLs)                                            │
+│   - Políticas de throttling (Gold/Platinum/Unlimited)                   │
+│   - Configuración de retry/timeout                                      │
+│   - Certificados TLS                                                    │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
 ## Flujo APIOps
 
-Este entorno implementa un flujo APIOps completo usando el **lifecycle estándar de WSO2** más un **componente React personalizado** para el registro en UAT:
+Este entorno implementa un flujo APIOps enterprise con promoción entre entornos:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -56,13 +75,91 @@ Este entorno implementa un flujo APIOps completo usando el **lifecycle estándar
 │     └── Simula aprobación Helix                                        │
 │                                                                         │
 │  4. on-helix-approval [~15s]                                           │
-│     ├── Crea PR en repo del subdominio                                 │
-│     ├── Merge automático                                               │
-│     └── Cierra Issue                                                   │
+│     ├── Crea revisión con estructura multi-entorno                     │
+│     ├── Genera params.yaml (UAT/NFT/PRO)                               │
+│     ├── Actualiza state.yaml                                           │
+│     └── Auto-merge PR                                                  │
 │                                                                         │
-│  5. Publisher muestra "API registrada correctamente"                   │
+│  5. Promoción (opcional): UAT → NFT → PRO                              │
+│     └── promote-api.yml workflow                                        │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Estructura de Repos de Dominio
+
+Cada dominio (subdominio) tiene su propio repositorio Git con esta estructura:
+
+```
+{Dominio}-{Subdominio}/
+  apis/
+    {APIName}/
+      state.yaml                    # Estado por entorno (auto-generated)
+      {Version}/
+        {rev-N}/
+          api.yaml                  # Definición API (inmutable)
+          Definitions/
+            swagger.yaml            # Contrato OpenAPI
+          Conf/
+            api_meta.yaml           # Metadata de deployment
+            params.yaml             # Configuración UAT/NFT/PRO
+            request.yaml            # Trazabilidad (CRQ, usuario, fecha)
+```
+
+### params.yaml - Configuración Multi-Entorno
+
+```yaml
+environments:
+  - name: uat
+    configs:
+      endpoints:
+        production:
+          url: https://backend-uat.internal/api
+      policies:
+        - Gold
+
+  - name: nft
+    configs:
+      endpoints:
+        production:
+          url: https://backend-nft.internal/api
+      policies:
+        - Platinum
+
+  - name: pro
+    configs:
+      endpoints:
+        production:
+          url: https://backend.company.com/api
+      policies:
+        - Unlimited
+```
+
+### state.yaml - Estado de Deployment
+
+```yaml
+api_name: EmployeeAPI
+last_updated: 2025-12-11T13:30:00Z
+
+environments:
+  uat:
+    version: "1.0.0"
+    revision: "rev-1"
+    status: DEPLOYED
+
+  nft:
+    version: "1.0.0"
+    revision: "rev-1"
+    status: DEPLOYED
+
+  pro:
+    version: null
+    revision: null
+    status: NOT_DEPLOYED
+
+history:
+  - "2025-12-11T12:00:00Z - DEPLOY rev-1 to uat"
+  - "2025-12-11T13:00:00Z - PROMOTE rev-1 to nft"
 ```
 
 ### Lifecycle Estándar + Componente UAT
@@ -84,8 +181,9 @@ Este entorno implementa un flujo APIOps completo usando el **lifecycle estándar
 | `./scripts/reset.sh` | Elimina todo y reinicia desde cero |
 | `./scripts/wait-for-apim.sh` | Espera a que APIM esté listo |
 | `./scripts/setup-all.sh` | Ejecuta toda la configuración inicial |
-| `./scripts/verify-lifecycle.sh` | Verifica el lifecycle customizado |
-| `./scripts/create-sample-api.sh` | Crea PizzaAPI de prueba |
+| `./scripts/test-e2e.sh` | Ejecuta 18 pruebas E2E del flujo completo |
+| `./scripts/create-test-apis.sh` | Crea APIs de prueba con subdominios |
+| `./scripts/migrate-to-new-structure.sh` | Migra repos a estructura multi-entorno |
 
 ## Estructura del Proyecto
 
@@ -227,7 +325,7 @@ O usar ventana de incógnito.
 
 ## Estado del Proyecto
 
-### Completado (2025-12-09)
+### Completado (2025-12-11)
 
 - [x] Componente UATRegistration en Publisher
 - [x] Self-hosted runner en Docker
@@ -238,12 +336,18 @@ O usar ventana de incógnito.
 - [x] Flujo end-to-end funcional (~30-45 segundos)
 - [x] Escalabilidad para 2500+ APIs (requestId único)
 - [x] Manejo de errores específicos en UI
+- [x] **Estructura multi-entorno (UAT/NFT/PRO)**
+- [x] **params.yaml con configuración por entorno**
+- [x] **state.yaml para tracking de deployments**
+- [x] **Workflow promote-api.yml para promociones**
+- [x] **18 pruebas E2E automatizadas**
 
 ### Pendiente
 
 - [ ] Integración real con Helix ITSM (actualmente simulado)
 - [ ] Gestión de tokens por usuario (OAuth federation)
 - [ ] Linters especializados (Spectral, seguridad)
+- [ ] Deployment real a WSO2 por entorno (integración apictl)
 
 ## Documentación Detallada
 

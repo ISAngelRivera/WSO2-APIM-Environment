@@ -1,14 +1,15 @@
 # Estado del Proyecto APIOps - WSO2 APIM
 
-**Última actualización:** 2025-12-09 (auto-merge + polling dos fases)
+**Última actualización:** 2025-12-11 (estructura multi-entorno UAT/NFT/PRO)
 **Versión WSO2 APIM:** 4.5.0
 
 ## Objetivo Principal
 
-Crear un sistema APIOps que integre:
+Crear un sistema APIOps enterprise que integre:
 1. **WSO2 API Manager** - Gestión de APIs
 2. **Git (GitHub)** - Versionado de definiciones de API + Backend (GitHub Actions)
 3. **Helix (ITSM)** - Gestión de cambios (CRQ)
+4. **Multi-Entorno** - Promoción UAT → NFT → PRO
 
 ### Arquitectura GitOps con Webhook de Helix (NUEVO 2025-12-07)
 
@@ -85,23 +86,32 @@ Crear un sistema APIOps que integre:
 Las APIs se organizan por **subdominio** (área de negocio) no por repositorio Git.
 El mapeo backend→subdominio se define en `repo-config.yaml` en GIT-Helix-Processor.
 
-### Estructura de Carpetas
+### Estructura de Carpetas (v2 - Multi-Entorno)
 
 ```
 {RepoSubdominio}/               # Ej: ISAngelRivera/Finanzas-Pagos
 ├── apis/
 │   ├── AccountAPI/             # Nombre de la API
-│   │   ├── v1.0.0/             # Versión (max 4)
-│   │   │   ├── api.yaml        # Metadata
-│   │   │   ├── Definitions/    # OpenAPI/Swagger
-│   │   │   └── revisions/      # Revisiones (max 4)
-│   │   │       ├── rev-1/      # Revisión 1
-│   │   │       │   ├── request.yaml
-│   │   │       │   └── ...
-│   │   │       └── rev-2/
-│   │   └── v2.0.0/
+│   │   ├── state.yaml          # Estado por entorno (auto-generated)
+│   │   ├── 1.0.0/              # Versión
+│   │   │   └── rev-1/          # Revisión (inmutable)
+│   │   │       ├── api.yaml    # Definición API
+│   │   │       ├── Definitions/
+│   │   │       │   └── swagger.yaml
+│   │   │       └── Conf/
+│   │   │           ├── api_meta.yaml    # Metadata
+│   │   │           ├── params.yaml      # Config UAT/NFT/PRO
+│   │   │           └── request.yaml     # Trazabilidad
+│   │   └── 2.0.0/
+│   │       └── rev-1/
 │   └── PaymentAPI/
 ```
+
+**Ventajas de la nueva estructura:**
+- Cada revisión es un snapshot inmutable
+- params.yaml contiene configuración de TODOS los entornos
+- state.yaml permite saber qué revisión está en cada entorno
+- 100% trazabilidad: qué revisión con qué config se desplegó
 
 **Límites:**
 - Máximo 4 versiones por API (las antiguas se rotan/eliminan)
@@ -228,6 +238,32 @@ github-runner:
     - Click en "Registrar en UAT" → Validaciones → Issue → Simula Helix → PR → Merge → Éxito
     - Tiempo total: ~30-45 segundos
     - Escalable para 2500+ APIs gracias a requestId único
+31. **Estructura multi-entorno (UAT/NFT/PRO)** ✅ (2025-12-11)
+    - Nueva estructura de carpetas: `apis/{API}/{Ver}/{rev-N}/`
+    - `state.yaml` a nivel de API para tracking de deployments por entorno
+    - `params.yaml` con configuración específica por entorno (endpoints, policies, retry)
+    - Script de migración `migrate-to-new-structure.sh`
+    - Repositorios migrados: RRHH-Empleados, Finanzas-Pagos
+32. **Workflow on-helix-approval.yml v2** ✅ (2025-12-11)
+    - Genera estructura multi-entorno automáticamente
+    - Crea/actualiza `state.yaml` con historial de operaciones
+    - Genera `params.yaml` con 3 entornos configurados
+    - Extrae action y environment del Issue metadata
+33. **Workflow promote-api.yml** ✅ (2025-12-11)
+    - Nuevo workflow para promoción entre entornos
+    - Soporta flujo UAT → NFT → PRO
+    - Valida estado actual antes de promocionar
+    - Crea Issue de tracking para deployments a PRO
+34. **Labels de entorno y acción** ✅ (2025-12-11)
+    - `env:uat`, `env:nft`, `env:pro` - Para identificar entorno target
+    - `action:deploy`, `action:promote`, `action:rollback` - Para identificar operación
+35. **18 pruebas E2E automatizadas** ✅ (2025-12-11)
+    - Infraestructura (WSO2, Runner, OAuth)
+    - APIs de ejemplo (subdominios)
+    - Validaciones de negocio (sin subdominio, sin deployment)
+    - Flujo UAT completo
+    - Usuarios de prueba
+    - Integración Git
 
 ### Usuarios del Sistema
 
@@ -264,6 +300,11 @@ github-runner:
    - Validaciones de seguridad
    - Políticas de empresa
 
+4. **Deployment real a WSO2 por entorno**
+   - Integración con apictl para deploy real
+   - Conexión a instancias WSO2 de UAT/NFT/PRO
+   - Actualización de state.yaml con status DEPLOYED
+
 ## Workflows de GitHub Actions
 
 ### WSO2-Processor
@@ -277,7 +318,8 @@ github-runner:
 | Workflow | Archivo | Descripción |
 |----------|---------|-------------|
 | Process API Request | `process-api-request.yml` | Crea Issue, guarda artifact, simula CRQ |
-| On Helix Approval | `on-helix-approval.yml` | Recibe webhook, crea PR en subdominio |
+| On Helix Approval | `on-helix-approval.yml` | Recibe webhook, crea estructura multi-entorno, PR en subdominio |
+| Promote API | `promote-api.yml` | Promociona API entre entornos (UAT→NFT→PRO) |
 
 ### Flujo Detallado
 
