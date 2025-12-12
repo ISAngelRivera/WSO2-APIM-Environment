@@ -50,6 +50,17 @@ import AuthManager from 'AppData/AuthManager';
 const PREFIX = 'UATRegistration';
 
 // =============================================================================
+// Debug logging - disable in production by setting APIOpsConfig.debug = false
+// =============================================================================
+const DEBUG = window.APIOpsConfig?.debug ?? false;
+const log = (...args) => {
+    if (DEBUG) {
+        // eslint-disable-next-line no-console
+        log('', ...args);
+    }
+};
+
+// =============================================================================
 // GitHub Configuration for WSO2-Processor
 // Configuration is loaded from /publisher/site/public/conf/apiops-config.js
 // which is mounted via Docker and editable without rebuild
@@ -308,13 +319,13 @@ const getWorkflowRunByRequestId = async (requestId) => {
 
     // Find the run that matches our request ID by checking the display_title or name
     // GitHub Actions includes the inputs in the run name when using workflow_dispatch
-    console.log(`[UAT] Searching for requestId: ${requestId} in ${runs.length} runs`);
+    log(`Searching for requestId: ${requestId} in ${runs.length} runs`);
     for (const run of runs) {
         // Check if this run matches our request ID
         // The request ID should be in the run's display_title or we need to check the jobs
-        console.log(`[UAT] Checking run ${run.id}: display_title="${run.display_title}"`);
+        log(`Checking run ${run.id}: display_title="${run.display_title}"`);
         if (run.display_title?.includes(requestId) || run.name?.includes(requestId)) {
-            console.log(`[UAT] Found matching run: ${run.id}`);
+            log(`Found matching run: ${run.id}`);
             return run;
         }
     }
@@ -629,7 +640,7 @@ export default function UATRegistration(props) {
 
                     if (run) {
                         runId = run.id;
-                        console.log(`[UAT] Found run ${run.id}, status: ${run.status}, conclusion: ${run.conclusion}`);
+                        log(` Found run ${run.id}, status: ${run.status}, conclusion: ${run.conclusion}`);
                         setRegistrationData((prev) => ({
                             ...prev,
                             runId: run.id,
@@ -638,7 +649,7 @@ export default function UATRegistration(props) {
 
                         // If the run is already completed (fast workflows), handle it immediately
                         if (run.status === 'completed') {
-                            console.log(`[UAT] Run already completed with conclusion: ${run.conclusion}`);
+                            log(` Run already completed with conclusion: ${run.conclusion}`);
                             if (run.conclusion === 'success') {
                                 // Success! Now check Helix-Processor
                                 setRegistrationData((prev) => ({
@@ -652,7 +663,7 @@ export default function UATRegistration(props) {
                             // Workflow failed - get error details
                             const jobsData = await getWorkflowJobs(run.id);
                             const errorMsg = extractErrorFromJobs(jobsData);
-                            console.log(`[UAT] Error from completed run: ${errorMsg}`);
+                            log(` Error from completed run: ${errorMsg}`);
 
                             setRegistrationData((prev) => ({
                                 ...prev,
@@ -684,7 +695,7 @@ export default function UATRegistration(props) {
 
                 if (runId) {
                     // Get current run status
-                    console.log(`[UAT] Checking status of run ${runId}`);
+                    log(` Checking status of run ${runId}`);
                     const runResponse = await fetch(
                         `https://api.github.com/repos/${config.owner}/${config.repo}/actions/runs/${runId}`,
                         {
@@ -697,7 +708,7 @@ export default function UATRegistration(props) {
 
                     if (runResponse.ok) {
                         const runData = await runResponse.json();
-                        console.log(`[UAT] Run status: ${runData.status}, conclusion: ${runData.conclusion}`);
+                        log(` Run status: ${runData.status}, conclusion: ${runData.conclusion}`);
 
                         // Update state based on workflow status
                         if (runData.status === 'in_progress' || runData.status === 'queued') {
@@ -725,10 +736,10 @@ export default function UATRegistration(props) {
 
                             setTimeout(poll, pollInterval);
                         } else if (runData.status === 'completed') {
-                            console.log(`[UAT] Workflow completed with conclusion: ${runData.conclusion}`);
+                            log(` Workflow completed with conclusion: ${runData.conclusion}`);
                             if (runData.conclusion === 'success') {
                                 // Success! Now check Helix-Processor
-                                console.log('[UAT] WSO2-Processor succeeded, polling Helix-Processor...');
+                                log(' WSO2-Processor succeeded, polling Helix-Processor...');
                                 setRegistrationData((prev) => ({
                                     ...prev,
                                     state: STATES.REQUESTING_CRQ,
@@ -738,10 +749,10 @@ export default function UATRegistration(props) {
                                 pollHelixProcessor(triggeredAt, requestId);
                             } else {
                                 // Workflow failed
-                                console.log(`[UAT] WSO2-Processor FAILED with conclusion: ${runData.conclusion}`);
+                                log(` WSO2-Processor FAILED with conclusion: ${runData.conclusion}`);
                                 const jobsData = await getWorkflowJobs(runId);
                                 const errorMsg = extractErrorFromJobs(jobsData);
-                                console.log(`[UAT] Error message: ${errorMsg}`);
+                                log(` Error message: ${errorMsg}`);
 
                                 setRegistrationData((prev) => ({
                                     ...prev,
@@ -790,7 +801,7 @@ export default function UATRegistration(props) {
         let phase = 1; // Phase 1: process-api-request, Phase 2: on-helix-approval
         let processApiRequestCompleted = false;
 
-        console.log(`[UAT] Polling Helix-Processor for requestId: ${requestId}`);
+        log(` Polling Helix-Processor for requestId: ${requestId}`);
 
         /**
          * Extract error details from Helix-Processor jobs
@@ -805,7 +816,7 @@ export default function UATRegistration(props) {
                 const failedStep = failedJob?.steps?.find((s) => s.conclusion === 'failure');
                 const stepName = failedStep?.name?.toLowerCase() || '';
 
-                console.log(`[UAT] Helix-Processor failed step: ${failedStep?.name}`);
+                log(` Helix-Processor failed step: ${failedStep?.name}`);
 
                 if (stepName.includes('subdominio') || stepName.includes('validate')) {
                     errorMsg = 'El subdominio configurado no existe en el sistema. '
@@ -909,13 +920,13 @@ export default function UATRegistration(props) {
                         });
                     }
 
-                    console.log(`[UAT] Phase 1 - process-api-request run: ${matchingRun?.id || 'not found'}`);
+                    log(` Phase 1 - process-api-request run: ${matchingRun?.id || 'not found'}`);
 
                     if (matchingRun) {
                         if (matchingRun.status === 'completed') {
                             if (matchingRun.conclusion === 'success') {
                                 // Phase 1 complete! Move to Phase 2
-                                console.log('[UAT] Phase 1 complete, moving to Phase 2 (on-helix-approval)');
+                                log(' Phase 1 complete, moving to Phase 2 (on-helix-approval)');
                                 processApiRequestCompleted = true;
                                 phase = 2;
                                 setRegistrationData((prev) => ({
@@ -976,13 +987,13 @@ export default function UATRegistration(props) {
                         });
                     }
 
-                    console.log(`[UAT] Phase 2 - on-helix-approval run: ${approvalRun?.id || 'not found'}`);
+                    log(` Phase 2 - on-helix-approval run: ${approvalRun?.id || 'not found'}`);
 
                     if (approvalRun) {
                         if (approvalRun.status === 'completed') {
                             if (approvalRun.conclusion === 'success') {
                                 // Full success! PR created and merged
-                                console.log('[UAT] Phase 2 complete - API registered successfully!');
+                                log(' Phase 2 complete - API registered successfully!');
                                 setRegistrationData((prev) => ({
                                     ...prev,
                                     state: STATES.REGISTERED,

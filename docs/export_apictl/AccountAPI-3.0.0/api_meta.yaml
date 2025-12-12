@@ -1,7 +1,0 @@
-deploy:
-  import:
-    preserveProvider: true
-    rotateRevision: false
-    update: true
-name: AccountAPI
-version: 3.0.0

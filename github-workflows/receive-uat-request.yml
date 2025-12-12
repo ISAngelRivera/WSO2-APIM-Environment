@@ -1,5 +1,5 @@
 # =============================================================================
-# WSO2-Processor: Receive UAT Registration Request
+# apim-exporter-wso2: Receive UAT Registration Request
 # =============================================================================
 name: Receive UAT Request
 
@@ -42,7 +42,7 @@ env:
   WSO2_BASE_URL: https://wso2-apim:9443
   WSO2_USERNAME: admin
   WSO2_PASSWORD: admin
-  TARGET_REPO: ISAngelRivera/GIT-Helix-Processor
+  TARGET_REPO: ISAngelRivera/apim-apiops-controller
   TARGET_BRANCH: main
 
 jobs:
@@ -51,7 +51,7 @@ jobs:
     runs-on: [self-hosted, linux, apiops]
 
     steps:
-      - name: Checkout WSO2-Processor
+      - name: Checkout apim-exporter-wso2
         uses: actions/checkout@v4
 
       - name: Log Request Details
@@ -171,7 +171,7 @@ jobs:
           ls -la "$REQUEST_DIR/"
           cat "$REQUEST_DIR/request.yaml"
 
-      - name: Create PR in GIT-Helix-Processor
+      - name: Create PR in apim-apiops-controller
         env:
           GH_TOKEN: ${{ secrets.GIT_HELIX_PAT }}
         run: |
@@ -191,7 +191,7 @@ jobs:
           git checkout -b "${BRANCH_NAME}"
           mkdir -p "requests/${REQUEST_ID}"
           cp -r "../${REQUEST_DIR}"/* "requests/${REQUEST_ID}/"
-          git config user.name "WSO2-Processor Bot"
+          git config user.name "apim-exporter-wso2 Bot"
           git config user.email "wso2-processor@github.actions"
           git add .
           git commit -m "feat: UAT request for ${{ inputs.apiName }} v${{ inputs.apiVersion }}"

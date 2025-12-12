@@ -1,4 +1,4 @@
-# WSO2-APIM-Environment
+# apim-local-env
 
 Entorno de desarrollo Docker para WSO2 API Manager 4.5.0 con flujo APIOps enterprise multi-entorno (UAT → NFT → PRO).
 
@@ -12,8 +12,8 @@ Entorno de desarrollo Docker para WSO2 API Manager 4.5.0 con flujo APIOps enterp
 
 ```bash
 # 1. Clonar el repositorio
-git clone https://github.com/ISAngelRivera/WSO2-APIM-Environment.git
-cd WSO2-APIM-Environment
+git clone https://github.com/ISAngelRivera/apim-local-env.git
+cd apim-local-env
 
 # 2. Iniciar el entorno
 ./scripts/start.sh
@@ -63,12 +63,12 @@ Este entorno implementa un flujo APIOps enterprise con promoción entre entornos
 │  1. Publisher Portal                                                    │
 │     └── Usuario hace clic en "Registrar en UAT"                        │
 │                                                                         │
-│  2. WSO2-Processor (self-hosted runner) [~10s]                         │
+│  2. apim-exporter-wso2 (self-hosted runner) [~10s]                         │
 │     ├── Valida API desplegada                                          │
 │     ├── Exporta API con apictl                                         │
 │     └── Valida subdominio configurado                                  │
 │                                                                         │
-│  3. GIT-Helix-Processor [~15s]                                         │
+│  3. apim-apiops-controller [~15s]                                         │
 │     ├── Valida subdominio existe                                       │
 │     ├── Crea Issue (cola de solicitudes)                               │
 │     ├── Guarda artifact (export API)                                   │
@@ -194,7 +194,7 @@ last_registration:
 ## Estructura del Proyecto
 
 ```
-WSO2-APIM-Environment/
+apim-local-env/
 ├── docker-compose.yml          # Definición del contenedor
 ├── lifecycle/
 │   └── APILifeCycle.xml        # Lifecycle customizado
@@ -226,16 +226,16 @@ Los datos se persisten en volúmenes Docker:
 3. **Ve a la pestaña "Lifecycle"**
 4. **Verás el botón "Register UAT"**
 
-Al pulsar el botón, el estado cambiará a "Registering UAT". En el MVP, el workflow externo (WSO2-Processor → GIT-Helix-Processor) cambiará el estado a "Registered UAT" cuando complete el registro.
+Al pulsar el botón, el estado cambiará a "Registering UAT". En el MVP, el workflow externo (apim-exporter-wso2 → apim-apiops-controller) cambiará el estado a "Registered UAT" cuando complete el registro.
 
 ## Integración con APIOps
 
 Este entorno se integra con:
 
-- **WSO2-Processor**: Recibe eventos de lifecycle
-- **GIT-Helix-Processor**: Registra APIs en repositorios Git
+- **apim-exporter-wso2**: Recibe eventos de lifecycle
+- **apim-apiops-controller**: Registra APIs en repositorios Git
 - **Informatica-DevOps**: Repositorio de ejemplo para dominio Informática
-- **Finanzas-Pagos**: Repositorio de ejemplo para dominio Finanzas
+- **apim-domain-finanzas**: Repositorio de ejemplo para dominio Finanzas
 
 ## Desarrollo del Publisher (APIOps)
 
@@ -335,8 +335,8 @@ O usar ventana de incógnito.
 
 - [x] Componente UATRegistration en Publisher
 - [x] Self-hosted runner en Docker
-- [x] WSO2-Processor: extrae APIs y valida
-- [x] GIT-Helix-Processor: sistema de Issues + simulación Helix
+- [x] apim-exporter-wso2: extrae APIs y valida
+- [x] apim-apiops-controller: sistema de Issues + simulación Helix
 - [x] on-helix-approval: crea PR + auto-merge
 - [x] Polling en dos fases en Publisher
 - [x] Flujo end-to-end funcional (~30-45 segundos)

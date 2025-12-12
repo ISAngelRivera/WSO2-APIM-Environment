@@ -18,7 +18,7 @@ LABEL maintainer="APIOps Team"
 LABEL description="GitHub Actions Runner for WSO2 APIOps"
 LABEL version="1.1"
 
-# Instalar dependencias base
+# Instalar dependencias base incluyendo OpenSSL actualizado
 RUN apt-get update && apt-get install -y \
     curl \
     jq \
@@ -31,8 +31,15 @@ RUN apt-get update && apt-get install -y \
     sudo \
     python3 \
     python3-pip \
+    openssl \
+    libssl3 \
+    libicu70 \
+    && update-ca-certificates \
     && pip3 install pyyaml \
     && rm -rf /var/lib/apt/lists/*
+
+# Configurar OpenSSL para permitir algoritmos legacy (fix ARM64 SSL issues)
+RUN sed -i 's/openssl_conf = openssl_init/openssl_conf = openssl_init\n\n[openssl_init]\nssl_conf = ssl_sect\n\n[ssl_sect]\nsystem_default = system_default_sect\n\n[system_default_sect]\nMinProtocol = TLSv1.2\nCipherString = DEFAULT@SECLEVEL=1/' /etc/ssl/openssl.cnf || true
 
 # Instalar GitHub CLI (gh)
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
@@ -63,7 +70,7 @@ RUN ARCH=$(dpkg --print-architecture) && \
     chmod +x /home/runner/.local/bin/apictl/apictl && \
     chown -R runner:runner /home/runner/.local
 
-# Versión del runner de GitHub Actions
+# Versión del runner de GitHub Actions (2.321.0 tiene mejor soporte SSL para ARM64)
 ARG RUNNER_VERSION=2.321.0
 
 # Descargar e instalar el runner (detecta arquitectura automáticamente)
@@ -98,5 +105,15 @@ ENV GITHUB_OWNER=""
 ENV GITHUB_REPO=""
 ENV RUNNER_LABELS="self-hosted,linux,apiops"
 ENV RUNNER_WORKDIR="/home/runner/_work"
+
+# Fix SSL issues con .NET en ARM64/OpenSSL 3.x
+# El runner de GitHub usa .NET que tiene problemas con OpenSSL 3.x en ARM64
+ENV DOTNET_SYSTEM_NET_HTTP_USESOCKETSHTTPHANDLER=0
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+# Forzar uso de HttpClientHandler nativo
+ENV DOTNET_SYSTEM_NET_HTTP_SOCKETSHTTPHANDLER_HTTP3SUPPORT=0
+# Usar configuración OpenSSL legacy
+ENV OPENSSL_CONF=/etc/ssl/openssl_legacy.cnf
 
 ENTRYPOINT ["/entrypoint.sh"]

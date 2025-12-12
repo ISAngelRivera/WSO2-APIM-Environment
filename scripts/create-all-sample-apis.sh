@@ -12,7 +12,7 @@
 #
 # Distribución:
 #   - Informatica-DevOps: 4 APIs
-#   - Finanzas-Pagos: 6 APIs
+#   - apim-domain-finanzas: 6 APIs
 #
 # Uso: ./scripts/create-all-sample-apis.sh
 
@@ -77,11 +77,11 @@ create_revision "NotificationAPI" "1.1.0" "Añadido soporte SMS"
 
 
 # ══════════════════════════════════════════════════════════════
-# DOMINIO: Finanzas-Pagos (6 APIs)
+# DOMINIO: apim-domain-finanzas (6 APIs)
 # ══════════════════════════════════════════════════════════════
 
 echo ""
-echo "═══ DOMINIO: Finanzas-Pagos ═══"
+echo "═══ DOMINIO: apim-domain-finanzas ═══"
 echo ""
 
 # --- PaymentAPI: Ciclo de vida completo con deprecated ---

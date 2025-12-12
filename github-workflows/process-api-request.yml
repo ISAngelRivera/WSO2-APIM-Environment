@@ -1,5 +1,5 @@
 # =============================================================================
-# GIT-Helix-Processor: Motor Central de Procesamiento de APIs
+# apim-apiops-controller: Motor Central de Procesamiento de APIs
 # =============================================================================
 # Vendor-agnostic: recibe datos de cualquier API Manager (WSO2, Apigee, Kong...)
 #

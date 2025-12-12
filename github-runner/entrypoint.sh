@@ -10,6 +10,13 @@ set -e
 # 3. Ejecuta el runner
 # 4. Limpia al salir (de-registra el runner)
 
+# Fix SSL issues with .NET on ARM64/OpenSSL 3.x
+export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+export DOTNET_SYSTEM_NET_HTTP_USESOCKETSHTTPHANDLER=0
+export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+export OPENSSL_CONF=/etc/ssl/openssl_legacy.cnf
+export DOTNET_SYSTEM_NET_HTTP_SOCKETSHTTPHANDLER_HTTP3SUPPORT=0
+
 echo "========================================"
 echo "  GitHub Actions Runner - APIOps"
 echo "========================================"

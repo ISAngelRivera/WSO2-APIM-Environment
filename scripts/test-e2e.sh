@@ -33,8 +33,8 @@ WSO2_PORT="9443"
 WSO2_ADMIN_USER="admin"
 WSO2_ADMIN_PASS="admin"
 GITHUB_OWNER="ISAngelRivera"
-WSO2_PROCESSOR_REPO="WSO2-Processor"
-HELIX_PROCESSOR_REPO="GIT-Helix-Processor"
+WSO2_PROCESSOR_REPO="apim-exporter-wso2"
+HELIX_PROCESSOR_REPO="apim-apiops-controller"
 
 # Contadores
 TESTS_PASSED=0
@@ -465,8 +465,8 @@ test_uat_without_subdominio() {
 }
 
 # Test 3.3: Añadir subdominio inválido y probar
-# NOTA: Esta prueba verifica que el GIT-Helix-Processor rechace subdominios no configurados.
-# El WSO2-Processor solo valida que exista el campo subdominio, no su validez.
+# NOTA: Esta prueba verifica que el apim-apiops-controller rechace subdominios no configurados.
+# El apim-exporter-wso2 solo valida que exista el campo subdominio, no su validez.
 # Por eso esperamos el segundo workflow (Helix-Processor) para validar.
 test_uat_invalid_subdominio() {
     if [ "$QUICK_MODE" = true ]; then
@@ -489,9 +489,9 @@ test_uat_invalid_subdominio() {
     log_info "Disparando UAT con subdominio inválido (validación en Helix-Processor)..."
     local request_id=$(trigger_uat_workflow "$PIZZA_API_ID" "PizzaTestAPI" "1.0.0")
 
-    # Primero esperamos que WSO2-Processor termine (puede ser success porque pasa el subdominio)
+    # Primero esperamos que apim-exporter-wso2 termine (puede ser success porque pasa el subdominio)
     local wso2_result=$(wait_for_workflow "$request_id" 90)
-    log_verbose "WSO2-Processor result: $wso2_result"
+    log_verbose "apim-exporter-wso2 result: $wso2_result"
 
     # Luego verificamos el Helix-Processor (debe fallar por subdominio inválido)
     sleep 5  # Dar tiempo a que se dispare el segundo workflow
@@ -503,7 +503,7 @@ test_uat_invalid_subdominio() {
     if [ "$helix_run" == "failure" ]; then
         log_success "UAT con subdominio inválido: Helix-Processor rechazó correctamente"
     elif [ "$wso2_result" == "failure" ]; then
-        log_success "UAT con subdominio inválido: WSO2-Processor rechazó"
+        log_success "UAT con subdominio inválido: apim-exporter-wso2 rechazó"
     else
         log_fail "UAT con subdominio inválido debería haber fallado (WSO2: $wso2_result, Helix: $helix_run)"
     fi
@@ -654,21 +654,21 @@ test_dev1_can_list_apis
 
 section "6. PRUEBAS DE GIT"
 
-# Test 6.1: Verificar repo RRHH-Empleados
+# Test 6.1: Verificar repo apim-domain-rrhh
 test_rrhh_repo() {
-    if gh repo view "${GITHUB_OWNER}/RRHH-Empleados" > /dev/null 2>&1; then
-        log_success "Repo RRHH-Empleados existe"
+    if gh repo view "${GITHUB_OWNER}/apim-domain-rrhh" > /dev/null 2>&1; then
+        log_success "Repo apim-domain-rrhh existe"
     else
-        log_fail "Repo RRHH-Empleados no existe"
+        log_fail "Repo apim-domain-rrhh no existe"
     fi
 }
 
-# Test 6.2: Verificar repo Finanzas-Pagos
+# Test 6.2: Verificar repo apim-domain-finanzas
 test_finanzas_repo() {
-    if gh repo view "${GITHUB_OWNER}/Finanzas-Pagos" > /dev/null 2>&1; then
-        log_success "Repo Finanzas-Pagos existe"
+    if gh repo view "${GITHUB_OWNER}/apim-domain-finanzas" > /dev/null 2>&1; then
+        log_success "Repo apim-domain-finanzas existe"
     else
-        log_fail "Repo Finanzas-Pagos no existe"
+        log_fail "Repo apim-domain-finanzas no existe"
     fi
 }
 

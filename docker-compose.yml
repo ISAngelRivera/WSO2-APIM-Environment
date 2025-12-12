@@ -1,38 +1,53 @@
-# WSO2 API Manager 4.5.0 - Entorno de Desarrollo APIOps
+# =============================================================================
+# WSO2 API Manager 4.5.0 - Entorno APIOps
+# =============================================================================
 #
-# Uso:
-#   Primera vez:     docker-compose up -d && ./scripts/wait-for-apim.sh && ./scripts/setup-all.sh
-#   Siguientes:      docker-compose up -d
-#   Reset completo:  docker-compose down -v && docker-compose up -d && ./scripts/setup-all.sh
+# Sistema de integración WSO2 + GitHub para gestión de APIs con Git como
+# source of truth y aprobaciones via Helix ITSM.
+#
+# INICIO RÁPIDO:
+#   1. Copiar .env.example a .env y configurar GITHUB_TOKEN
+#   2. docker compose up -d
+#   3. Esperar ~3 minutos a que WSO2 esté healthy
+#   4. ./scripts/setup-all.sh (primera vez)
+#
+# COMANDOS ÚTILES:
+#   Ver estado:    docker compose ps
+#   Ver logs:      docker compose logs -f [servicio]
+#   Reiniciar:     docker compose restart [servicio]
+#   Reset total:   docker compose down -v && docker compose up -d
+#
+# =============================================================================
 
 services:
+  # ---------------------------------------------------------------------------
+  # WSO2 API Manager
+  # ---------------------------------------------------------------------------
+  # Portal de gestión de APIs con componente UATRegistration integrado
+  # para registro automatizado en entornos UAT via GitHub Actions.
+  #
   wso2-apim:
     image: wso2/wso2am:4.5.0
     container_name: wso2-apim
     hostname: wso2-apim
+    labels:
+      com.apiops.service: "wso2-apim"
+      com.apiops.description: "WSO2 API Manager with APIOps integration"
+      com.apiops.version: "4.5.0"
     ports:
-      # Portal de Publisher
-      - "9443:9443"
-      # Portal de DevPortal
-      - "9763:9763"
-      # Gateway HTTPS
-      - "8243:8243"
-      # Gateway HTTP
-      - "8280:8280"
+      - "9443:9443"   # Publisher & Carbon Admin (HTTPS)
+      - "9763:9763"   # DevPortal (HTTP)
+      - "8243:8243"   # Gateway (HTTPS)
+      - "8280:8280"   # Gateway (HTTP)
     volumes:
-      # Persistencia de datos
+      # --- Persistencia ---
       - wso2-apim-data:/home/wso2carbon/wso2am-4.5.0/repository/database
-      # Persistencia de configuración del registry (lifecycles)
       - wso2-apim-registry:/home/wso2carbon/wso2am-4.5.0/repository/resources
-      # Logs
       - wso2-apim-logs:/home/wso2carbon/wso2am-4.5.0/repository/logs
-      # Archivo de lifecycle customizado (montado como solo lectura)
+      # --- APIOps Customizations ---
       - ./lifecycle/APILifeCycle.xml:/home/wso2carbon/wso2am-4.5.0/repository/resources/lifecycles/APILifeCycle.xml:ro
-      # APIOps: Publisher con componente UATRegistration nativo (dropin React)
       - ./publisher-dropin:/home/wso2carbon/wso2am-4.5.0/repository/deployment/server/webapps/publisher/site/public/dist:ro
-      # APIOps: index.jsp con el hash correcto del bundle
       - ./publisher-dropin-pages/index.jsp:/home/wso2carbon/wso2am-4.5.0/repository/deployment/server/webapps/publisher/site/public/pages/index.jsp:ro
-      # APIOps: Configuración externa (GitHub token, feature flags)
       - ./publisher-config/apiops-config.js:/home/wso2carbon/wso2am-4.5.0/repository/deployment/server/webapps/publisher/site/public/conf/apiops-config.js:ro
     environment:
       - TZ=Europe/Madrid
@@ -44,42 +59,58 @@ services:
       start_period: 120s
     restart: unless-stopped
 
-  # ============================================
+  # ---------------------------------------------------------------------------
   # GitHub Actions Self-Hosted Runner
-  # ============================================
-  # Runner dockerizado para ejecutar workflows de APIOps
-  # Puede acceder a WSO2 via la red de Docker (wso2-apim:9443)
+  # ---------------------------------------------------------------------------
+  # Runner dockerizado que ejecuta workflows de apim-exporter-wso2.
+  # Tiene acceso a WSO2 via la red de Docker (wso2-apim:9443).
   #
-  # IMPORTANTE: Antes de iniciar, configurar las variables en .env:
-  #   GITHUB_TOKEN=ghp_xxx...
-  #   GITHUB_OWNER=ISAngelRivera
-  #   GITHUB_REPO=WSO2-Processor
+  # CONFIGURACIÓN REQUERIDA (en .env):
+  #   GITHUB_TOKEN - Personal Access Token con scope 'repo'
+  #   GITHUB_OWNER - Owner del repositorio (ej: tu-org)
+  #   GITHUB_REPO  - Nombre del repo apim-exporter-wso2
   #
   github-runner:
     build:
       context: ./github-runner
       dockerfile: Dockerfile
     container_name: github-runner
+    labels:
+      com.apiops.service: "github-runner"
+      com.apiops.description: "GitHub Actions self-hosted runner for APIOps"
     environment:
       - GITHUB_TOKEN=${GITHUB_TOKEN}
-      - GITHUB_OWNER=${GITHUB_OWNER:-ISAngelRivera}
-      - GITHUB_REPO=${GITHUB_REPO:-WSO2-Processor}
+      - GITHUB_OWNER=${GITHUB_OWNER}
+      - GITHUB_REPO=${GITHUB_REPO}
       - RUNNER_NAME=apiops-runner-docker
       - RUNNER_LABELS=self-hosted,linux,x64,apiops
-      # WSO2 accesible desde el runner via Docker network
       - WSO2_BASE_URL=https://wso2-apim:9443
     depends_on:
       wso2-apim:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "Runner.Listener"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     restart: unless-stopped
-    # El runner necesita acceso a Docker para algunos workflows (opcional)
-    # volumes:
-    #   - /var/run/docker.sock:/var/run/docker.sock
 
+# -----------------------------------------------------------------------------
+# VOLÚMENES
+# -----------------------------------------------------------------------------
+# Datos persistentes de WSO2. Para reset completo: docker compose down -v
+#
 volumes:
   wso2-apim-data:
     name: wso2-apim-data
+    labels:
+      com.apiops.volume: "database"
   wso2-apim-registry:
     name: wso2-apim-registry
+    labels:
+      com.apiops.volume: "registry"
   wso2-apim-logs:
     name: wso2-apim-logs
+    labels:
+      com.apiops.volume: "logs"
