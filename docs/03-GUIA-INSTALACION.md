@@ -9,7 +9,7 @@ Manual para levantar el entorno APIOps en cualquier maquina con Docker.
 - Docker Desktop
 - 4GB RAM minimo para Docker
 - GitHub CLI (`gh`) instalado y autenticado
-- Token de GitHub con scope `repo`
+- Token de GitHub con scopes `repo` y `workflow`
 
 ---
 
@@ -41,8 +41,9 @@ Contenido del `.env`:
 ```bash
 GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxx
 GITHUB_OWNER=TuUsuario
-GITHUB_REPO=apim-exporter-wso2
 ```
+
+El entorno levanta 2 runners (uno por repo), configurados en `docker-compose.yml`.
 
 ### 3. Iniciar entorno
 
@@ -111,9 +112,11 @@ docker system df  # Verificar espacio
 ### Error de memoria
 Aumentar RAM en Docker Desktop (minimo 4GB)
 
-### El runner no se conecta
+### Un runner no se conecta
 ```bash
-docker logs github-runner
+# Ver logs de cada runner
+docker logs github-runner-exporter
+docker logs github-runner-controller
 # Verificar token en .env
 ```
 

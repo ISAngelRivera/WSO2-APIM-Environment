@@ -34,7 +34,7 @@ Este proyecto está en **transición de POC a Producción**. Esto significa:
 | API Gateway | WSO2 API Manager 4.5.0 |
 | UI Custom | React (JSX) - Componente UATRegistration |
 | Orquestación | GitHub Actions (workflows YAML) |
-| CI/CD | Self-hosted runner en Docker |
+| CI/CD | 2 Self-hosted runners en Docker (aislados) |
 | Contenedores | Docker Compose |
 | Scripting | Bash, jq, curl |
 | Versionado | Git + GitHub |
@@ -54,6 +54,15 @@ Este proyecto está en **transición de POC a Producción**. Esto significa:
                         │ (Helix simulation)   │
                         └──────────────────────┘
 ```
+
+## Runners (Aislamiento de Fallos)
+
+| Runner | Repo | Contenedor | Función |
+|--------|------|------------|---------|
+| `github-runner-exporter` | `apim-exporter-wso2` | Docker local | Exporta APIs de WSO2 |
+| `github-runner-controller` | `apim-apiops-controller` | Docker local | Orquesta flujos, Helix |
+
+Runners separados = si uno falla, el otro sigue funcionando.
 
 ## Repositorios
 

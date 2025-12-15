@@ -79,7 +79,7 @@ env:
 jobs:
   process-request:
     name: Process API Registration
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, apiops]
 
     steps:
       - name: Checkout Helix-Processor

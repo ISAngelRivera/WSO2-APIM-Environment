@@ -60,31 +60,57 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # GitHub Actions Self-Hosted Runner
+  # GitHub Actions Self-Hosted Runners
   # ---------------------------------------------------------------------------
-  # Runner dockerizado que ejecuta workflows de apim-exporter-wso2.
-  # Tiene acceso a WSO2 via la red de Docker (wso2-apim:9443).
+  # Runners dockerizados para ejecutar workflows de APIOps.
+  # Cada runner está asignado a un repositorio específico para aislamiento.
   #
   # CONFIGURACIÓN REQUERIDA (en .env):
-  #   GITHUB_TOKEN - Personal Access Token con scope 'repo'
-  #   GITHUB_OWNER - Owner del repositorio (ej: tu-org)
-  #   GITHUB_REPO  - Nombre del repo apim-exporter-wso2
+  #   GITHUB_TOKEN   - Personal Access Token con scope 'repo' y 'workflow'
+  #   GITHUB_OWNER   - Owner del repositorio (ej: tu-org)
   #
-  github-runner:
+  # Runner 1: apim-exporter-wso2 (exporta APIs de WSO2)
+  github-runner-exporter:
     build:
       context: ./github-runner
       dockerfile: Dockerfile
-    container_name: github-runner
+    container_name: github-runner-exporter
     labels:
-      com.apiops.service: "github-runner"
-      com.apiops.description: "GitHub Actions self-hosted runner for APIOps"
+      com.apiops.service: "github-runner-exporter"
+      com.apiops.description: "Runner for apim-exporter-wso2 workflows"
     environment:
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       - GITHUB_OWNER=${GITHUB_OWNER}
-      - GITHUB_REPO=${GITHUB_REPO}
-      - RUNNER_NAME=apiops-runner-docker
+      - GITHUB_REPO=apim-exporter-wso2
+      - RUNNER_NAME=apiops-runner-exporter
       - RUNNER_LABELS=self-hosted,linux,x64,apiops
       - WSO2_BASE_URL=https://wso2-apim:9443
+    depends_on:
+      wso2-apim:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "Runner.Listener"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  # Runner 2: apim-apiops-controller (orquesta flujos y Helix)
+  github-runner-controller:
+    build:
+      context: ./github-runner
+      dockerfile: Dockerfile
+    container_name: github-runner-controller
+    labels:
+      com.apiops.service: "github-runner-controller"
+      com.apiops.description: "Runner for apim-apiops-controller workflows"
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITHUB_OWNER=${GITHUB_OWNER}
+      - GITHUB_REPO=apim-apiops-controller
+      - RUNNER_NAME=apiops-runner-controller
+      - RUNNER_LABELS=self-hosted,linux,x64,apiops
     depends_on:
       wso2-apim:
         condition: service_healthy
